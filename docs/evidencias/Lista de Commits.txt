@@ -15,3 +15,7 @@ https://github.com/elihurivas25/telemedicina-prototipo/commit/a9f1e78e4aacfc82a0
 4. Marco de referencia completo — 10 referencias APA
 https://github.com/elihurivas25/telemedicina-prototipo/commit/1fc591b2a14e21d9cbd07ef77a3357b8e438e3c
 
+5. Documento metodología Scrum
+https://github.com/elihurivas25/telemedicina-prototipo/commit/e9657364579451c1e0cc34ca77f541a4e37e5541
+
+
