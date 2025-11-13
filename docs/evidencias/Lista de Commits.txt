@@ -21,5 +21,12 @@ https://github.com/elihurivas25/telemedicina-prototipo/commit/e9657364579451c1e0
 6.Agrego casos de uso y requerimientos funcionales
 https://github.com/elihurivas25/telemedicina-prototipo/commit/458c66f55ae2712b74dbda7a7666833dbff53169
 
+7. Agrego DER y descripción de entidades y relaciones en el reporte
+https://github.com/elihurivas25/telemedicina-prototipo/commit/a83310b51bead3a78b2c29c853e1f9e1eeb0e647
+
+8. Limpieza de evidencias
+https://github.com/elihurivas25/telemedicina-prototipo/commit/d869da566eac098b76aa57082f4a90592aca9fee
+
+
 
 
