@@ -1,0 +1,18 @@
+Historias de Usuario Oficiales:
+HU-01 Registro de paciente 
+HU-02 Publicar disponibilidad 
+HU-03 Pago de consulta 
+HU-04 Consentimiento informado 
+HU-05 Comunicación sincrónica 
+
+Historias de Usuario Complementarias 
+HU-06 Historia clínica mínima 
+HU-07 Recordatorios automáticos 
+HU-08 Cancelación y reembolso 
+HU-09 Gestión de perfil 
+HU-10 Ver agenda del día 
+HU-11 Descargar comprobante 
+HU-12 Adjuntar archivos clínicos 
+HU-13 Emitir receta médica 
+HU-14 Bitácora de auditoría 
+HU-15 Cancelación automática por falta de pago

@@ -18,4 +18,8 @@ https://github.com/elihurivas25/telemedicina-prototipo/commit/1fc591b2a14e21d9cb
 5. Documento metodología Scrum
 https://github.com/elihurivas25/telemedicina-prototipo/commit/e9657364579451c1e0cc34ca77f541a4e37e5541
 
+6.Agrego casos de uso y requerimientos funcionales
+https://github.com/elihurivas25/telemedicina-prototipo/commit/458c66f55ae2712b74dbda7a7666833dbff53169
+
+
 
