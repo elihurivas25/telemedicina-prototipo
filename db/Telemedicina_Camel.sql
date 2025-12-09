@@ -1,14 +1,9 @@
--- Telemedicina_Camel.sql
--- MySQL 8.x DDL with CamelCase tables and camelCase columns
--- Recommended workflow:
--- 1) DROP DATABASE Telemedicina;  (if you want a clean slate)
--- 2) CREATE DATABASE Telemedicina CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
--- 3) USE Telemedicina;
--- 4) Run this script.
--- 5) In Workbench: Database > Reverse Engineer... to generate the diagram and then File > Save Model (.mwb).
-
--- CREATE DATABASE Telemedicina CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
--- USE Telemedicina;
+-- Script de creación de la base de datos del prototipo de Telemedicina
+-- Autor: Elihú
+-- Proyecto: Prototipo de Telemedicina
+-- Descripción: Definición de tablas y relaciones del sistema
+-- Motor: MySQL
+-- Convención: Tablas en CamelCase y columnas en camelCase
 
 SET sql_mode = 'STRICT_ALL_TABLES';
 
