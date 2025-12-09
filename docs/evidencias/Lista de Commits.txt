@@ -30,6 +30,17 @@ https://github.com/elihurivas25/telemedicina-prototipo/commit/d869da566eac098b76
 9. Sprint 1 completo — documentación y evidencias listas
 https://github.com/elihurivas25/telemedicina-prototipo/commit/c05706ec5dbb94f444192d5c5f93e1d3ada43bf1
 
+10. Inicio Sprint 2 - Conexión a BD del hosting
+https://github.com/elihurivas25/telemedicina-prototipo/commit/25f43713b75cc3cfefeeee944d9a3dd7719b8316
+
+11. Eliminado config.php del repositorio — protegido por .gitignore
+https://github.com/elihurivas25/telemedicina-prototipo/commit/ba083e7edc2e2caebe3b86bd8d26f096a8553236
+
+12. Inicio Sprint 2 reprogramado — documentación, wireframes y API inicial
+https://github.com/elihurivas25/telemedicina-prototipo/commit/c1e7670a9862b7ac8a64b0f0873c6ab2a2202629
+
+13. Eliminado config.php del repositorio (seguridad aplicada)
+https://github.com/elihurivas25/telemedicina-prototipo/commit/cf9cea1697d229be7d89f4d6c1cb3c954a665684
 
 
 
