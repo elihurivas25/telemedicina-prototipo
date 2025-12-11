@@ -15,6 +15,7 @@ if ( !is_admin() && !isset($_GET['elementor-preview']) ) {
 get_header();
 ?>
 
+
 <div class="contenido-dashboard">
     <?php
     if ( have_posts() ) {

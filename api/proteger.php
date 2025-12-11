@@ -6,7 +6,12 @@
 */
 
 session_start();
+error_log("SESION ACTUAL: " . print_r($_SESSION, true));
 
+
+// Cabeceras para evitar que se cacheen las páginas privadas
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
 /*
   Función: requerirSesion
   Verifica que el usuario tenga sesión iniciada.
