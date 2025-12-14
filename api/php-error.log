@@ -1,0 +1,1 @@
+[09-Dec-2025 18:45:29 America/Mexico_City] Error en login.php: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'amartimx_telemed.Usuario' doesn't exist
