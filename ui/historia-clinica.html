@@ -1,0 +1,791 @@
+<!--
+  Página: Historia clínica (Médico)
+  Rol: MEDICO
+  Propósito: Consultar y actualizar la historia clínica de un paciente (alergias, antecedentes, medicamentos y notas),
+             además de gestionar adjuntos y recetas mediante modales, consumiendo endpoints del backend para lectura y guardado.
+-->
+
+<section id="historia-clinica-medico" style="max-width: 900px; margin: 0 auto;">
+
+  <h2 id="tituloHistoria">HISTORIA CLÍNICA</h2>
+  <p id="subtituloHistoria">
+    Consulta o añade información clínica del paciente.
+  </p>
+
+  <div id="tarjetaHistoria" style="border: 1px solid #ddd; border-radius: 20px; padding: 20px; margin-top: 20px;">
+
+    <!-- Datos generales del paciente -->
+    <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+      <div>
+        <strong>Datos del Paciente</strong><br>
+        Nombre: <span id="hcNombrePaciente"></span><br>
+        Género: <span id="hcSexo"></span>
+      </div>
+      <div style="text-align: right;">
+        Edad: <span id="hcEdad"></span><br>
+        Última actualización: <span id="hcUltimaActualizacion"></span>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Alergias y antecedentes -->
+    <div style="display: flex; gap: 40px; margin-top: 15px;">
+      <div style="flex: 1;">
+        <strong>Alergias</strong>
+        <ul id="listaAlergias"></ul>
+        <a href="#" id="btnAgregarAlergia">+ Agregar Alergia</a>
+      </div>
+
+      <div style="flex: 1;">
+        <strong>Antecedentes médicos</strong>
+        <ul id="listaAntecedentes"></ul>
+        <a href="#" id="btnAgregarAntecedente">+ Agregar Antecedente</a>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Medicamentos actuales -->
+    <div style="margin-top: 15px;">
+      <strong>Medicamentos actuales</strong>
+      <ul id="listaMedicamentos"></ul>
+      <a href="#" id="btnAgregarMedicamento">+ Agregar Medicamento</a>
+    </div>
+
+    <hr>
+
+    <!-- Notas de evolución -->
+    <div style="margin-top: 15px;">
+      <strong>Notas</strong>
+      <div id="textoNotas"></div>
+      <a href="#" id="btnAgregarNota">+ Agregar Nota</a>
+    </div>
+
+    <!-- Botones para abrir modales de Adjuntos y Recetas -->
+    <div style="margin-top: 20px; display: flex; gap: 10px;">
+      <button type="button" id="btnAdjuntos">Adjuntos</button>
+      <button type="button" id="btnRecetas">Recetas</button>
+    </div>
+
+  </div>
+</section>
+
+<!-- Modal simple para agregar datos a la historia clínica -->
+<div id="modalHistoria" style="display:none;
+                               position:fixed;
+                               top:0; left:0; right:0; bottom:0;
+                               background:rgba(0,0,0,0.5);
+                               z-index:9999;
+                               align-items:center;
+                               justify-content:center;">
+  <div style="background:#fff; padding:20px; border-radius:15px; max-width:500px; width:90%;">
+    <h3 id="modalHistoriaTitulo">Agregar dato</h3>
+    <p id="modalHistoriaEtiqueta" style="margin-bottom:8px;">Texto:</p>
+    <textarea id="modalHistoriaTexto" rows="4" style="width:100%;"></textarea>
+
+    <div style="margin-top:15px; text-align:right;">
+      <button type="button" id="btnModalCancelar">Cancelar</button>
+      <button type="button" id="btnModalGuardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Adjuntos de Historia Clínica -->
+<div id="modalAdjuntos" style="display:none;
+                               position:fixed;
+                               top:0; left:0; right:0; bottom:0;
+                               background:rgba(0,0,0,0.5);
+                               z-index:9999;
+                               align-items:center;
+                               justify-content:center;">
+  <div style="background:#fff; padding:20px; border-radius:15px; max-width:600px; width:95%;">
+    <h3>Adjuntos de la historia clínica</h3>
+
+    <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ccc;">Nombre</th>
+          <th style="text-align:left; border-bottom:1px solid #ccc;">Fecha</th>
+          <th style="text-align:left; border-bottom:1px solid #ccc;">Descargar</th>
+        </tr>
+      </thead>
+      <tbody id="tablaAdjuntosBody">
+        <!-- Se llena por JavaScript -->
+      </tbody>
+    </table>
+
+    <hr style="margin:15px 0;">
+
+    <div>
+      <label for="archivoAdjunto"><strong>Subir archivo:</strong></label><br>
+      <input type="file" id="archivoAdjunto">
+      <button type="button" id="btnSubirAdjunto">Subir</button>
+    </div>
+
+    <div style="margin-top:15px; text-align:right;">
+      <button type="button" id="btnCerrarAdjuntos">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  MODAL RECETAS (se guarda en Adjunto con tipo = 'RECETA')
+========================================================= -->
+<div id="modalRecetas" style="display:none;
+                               position:fixed;
+                               top:0; left:0; right:0; bottom:0;
+                               background:rgba(0,0,0,0.55);
+                               z-index:9999;
+                               align-items:center;
+                               justify-content:center;">
+
+  <div style="background:#fff; padding:22px; border-radius:16px; max-width:760px; width:95%;
+              box-shadow: 0 10px 28px rgba(0,0,0,0.25);">
+    <h3 style="margin-top:0;">Recetas del paciente</h3>
+
+    <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px;">Nombre</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px;">Fecha</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:8px;">Descargar</th>
+        </tr>
+      </thead>
+      <tbody id="tablaRecetasBody">
+        <tr><td colspan="3" style="padding:8px;">Sin datos.</td></tr>
+      </tbody>
+    </table>
+
+    <hr style="border:none; border-top:1px solid #eee; margin: 16px 0;">
+
+    <div>
+      <label for="archivoReceta" style="font-weight:600;">Subir receta:</label><br>
+      <input type="file" id="archivoReceta" style="margin-top:6px;">
+      <button type="button" id="btnSubirReceta"
+              style="margin-left:8px; padding:8px 14px; border-radius:10px; border:none; background:#0b57d0; color:#fff; cursor:pointer;">
+        Subir
+      </button>
+      <div id="recetaMsg" style="margin-top:10px; font-size:14px; color:#0a7;"></div>
+    </div>
+
+    <div style="margin-top:16px; text-align:right;">
+      <button type="button" id="btnCerrarRecetas"
+              style="padding:10px 18px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ---------------------------------------------
+// Variables de apoyo para el modal
+// ---------------------------------------------
+let campoActualHistoria = null; // alergia, antecedente, medicamento, nota
+
+// Obtener referencias a elementos del DOM
+const listaAlergias       = document.getElementById("listaAlergias");
+const listaAntecedentes   = document.getElementById("listaAntecedentes");
+const listaMedicamentos   = document.getElementById("listaMedicamentos");
+const textoNotas          = document.getElementById("textoNotas");
+const lblUltimaActual     = document.getElementById("hcUltimaActualizacion");
+
+const modalHistoria       = document.getElementById("modalHistoria");
+const modalTitulo         = document.getElementById("modalHistoriaTitulo");
+const modalEtiqueta       = document.getElementById("modalHistoriaEtiqueta");
+const modalTexto          = document.getElementById("modalHistoriaTexto");
+const btnModalCancelar    = document.getElementById("btnModalCancelar");
+const btnModalGuardar     = document.getElementById("btnModalGuardar");
+
+// Botones de "Agregar ..."
+const btnAgregarAlergia      = document.getElementById("btnAgregarAlergia");
+const btnAgregarAntecedente  = document.getElementById("btnAgregarAntecedente");
+const btnAgregarMedicamento  = document.getElementById("btnAgregarMedicamento");
+const btnAgregarNota         = document.getElementById("btnAgregarNota");
+
+// Elementos para Adjuntos
+const modalAdjuntos     = document.getElementById("modalAdjuntos");
+const tablaAdjuntosBody = document.getElementById("tablaAdjuntosBody");
+const btnAdjuntos       = document.getElementById("btnAdjuntos");
+const btnCerrarAdjuntos = document.getElementById("btnCerrarAdjuntos");
+const btnSubirAdjunto   = document.getElementById("btnSubirAdjunto");
+const inputArchivoAdj   = document.getElementById("archivoAdjunto");
+
+// ===== MODAL RECETAS =====
+const modalRecetas      = document.getElementById("modalRecetas");
+const tablaRecetasBody  = document.getElementById("tablaRecetasBody");
+const btnCerrarRecetas  = document.getElementById("btnCerrarRecetas");
+const btnSubirReceta    = document.getElementById("btnSubirReceta");
+const inputArchivoReceta= document.getElementById("archivoReceta");
+const recetaMsg         = document.getElementById("recetaMsg");
+const btnRecetas = document.getElementById("btnRecetas");
+
+
+// ---------------------------------------------
+// Funciones auxiliares
+// ---------------------------------------------
+function obtenerParametro(nombre) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(nombre);
+}
+
+// Convierte texto con saltos de línea en <li>
+function llenarListaDesdeTexto(texto, contenedorUl) {
+  contenedorUl.innerHTML = "";
+
+  if (!texto) {
+    return;
+  }
+
+  const lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l !== "");
+  lineas.forEach(linea => {
+    const li = document.createElement("li");
+    li.textContent = linea;
+    contenedorUl.appendChild(li);
+  });
+}
+
+// Convierte texto de notas en párrafo, respetando saltos de línea
+function mostrarNotas(texto, contenedor) {
+  contenedor.innerHTML = "";
+  if (!texto) {
+    return;
+  }
+  const parrafo = document.createElement("p");
+  parrafo.style.whiteSpace = "pre-line";
+  parrafo.textContent = texto;
+  contenedor.appendChild(parrafo);
+}
+
+// ---------------------------------------------
+// Carga inicial de la historia clínica
+// ---------------------------------------------
+async function cargarHistoriaClinica() {
+  const idPaciente = obtenerParametro("idPaciente");
+  if (!idPaciente) {
+    alert("No se especificó el paciente en la URL (idPaciente).");
+    return;
+  }
+
+  try {
+    const respuesta = await fetch("/api/get_historia_clinica.php?idPaciente=" + encodeURIComponent(idPaciente));
+    const texto = await respuesta.text();
+
+    let datos;
+    try {
+      datos = JSON.parse(texto);
+    } catch (e) {
+      console.error("Respuesta no válida:", texto);
+      alert("Error al interpretar la respuesta del servidor al cargar la historia clínica.");
+      return;
+    }
+
+    if (!datos.ok) {
+      alert(datos.error || "No se pudo obtener la historia clínica.");
+      return;
+    }
+
+    const paciente = datos.paciente;
+    const historia = datos.historia;
+
+    // Encabezado
+    document.getElementById("hcNombrePaciente").textContent = paciente.nombre || "";
+    document.getElementById("hcSexo").textContent           = paciente.sexo || "";
+    document.getElementById("hcEdad").textContent           = paciente.edad ? (paciente.edad + " años") : "N/D";
+    lblUltimaActual.textContent = historia.ultimaActualizacion || "Sin registro";
+
+    const titulo = document.getElementById("tituloHistoria");
+    if (titulo && paciente.nombre) {
+      titulo.textContent = "HISTORIA CLÍNICA - " + paciente.nombre.toUpperCase();
+    }
+
+    // Listas
+    llenarListaDesdeTexto(historia.alergias,     listaAlergias);
+    llenarListaDesdeTexto(historia.antecedentes, listaAntecedentes);
+    llenarListaDesdeTexto(historia.medicamentos, listaMedicamentos);
+    mostrarNotas(historia.notaEvolucion, textoNotas);
+
+  } catch (error) {
+    console.error(error);
+    alert("Error de comunicación con el servidor al cargar la historia clínica.");
+  }
+}
+
+// ---------------------------------------------
+// Manejo del modal para agregar información
+// ---------------------------------------------
+function abrirModalHistoria(opciones) {
+  campoActualHistoria = opciones.campo; // alergia, antecedente, medicamento, nota
+  modalTitulo.textContent   = opciones.titulo;
+  modalEtiqueta.textContent = opciones.etiqueta;
+  modalTexto.value          = "";
+  modalHistoria.style.display = "flex";
+}
+
+function cerrarModalHistoria() {
+  modalHistoria.style.display = "none";
+  campoActualHistoria = null;
+}
+
+// Guardar desde el modal
+async function guardarDesdeModal() {
+  const idPaciente = obtenerParametro("idPaciente");
+  if (!idPaciente) {
+    alert("No se especificó el paciente en la URL (idPaciente).");
+    return;
+  }
+
+  if (!campoActualHistoria) {
+    cerrarModalHistoria();
+    return;
+  }
+
+  const texto = modalTexto.value.trim();
+  if (!texto) {
+    alert("Por favor escribe un texto antes de guardar.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("idPaciente", idPaciente);
+  formData.append("campo", campoActualHistoria); // alergia, antecedente, medicamento, nota
+  formData.append("texto", texto);
+
+  try {
+    const respuesta = await fetch("/api/guardar_historia_clinica.php", {
+      method: "POST",
+      body: formData
+    });
+
+    const crudo = await respuesta.text();
+    let json;
+    try {
+      json = JSON.parse(crudo);
+    } catch (e) {
+      console.error("Respuesta no válida al guardar historia:", crudo);
+      alert("Error al interpretar la respuesta del servidor al guardar la historia clínica.");
+      return;
+    }
+
+    if (!json.ok) {
+      alert(json.error || "No se pudo guardar la historia clínica.");
+      return;
+    }
+
+    // Actualizar la UI en función del campo devuelto
+    const campoBD = json.campo;  // alergias, antecedentes, medicamentos, notaEvolucion
+    const textoActualizado = json.texto || "";
+    const ultima = json.ultimaActualizacion || null;
+
+    if (ultima) {
+      lblUltimaActual.textContent = ultima;
+    }
+
+    if (campoBD === "alergias") {
+      llenarListaDesdeTexto(textoActualizado, listaAlergias);
+    } else if (campoBD === "antecedentes") {
+      llenarListaDesdeTexto(textoActualizado, listaAntecedentes);
+    } else if (campoBD === "medicamentos") {
+      llenarListaDesdeTexto(textoActualizado, listaMedicamentos);
+    } else if (campoBD === "notaEvolucion") {
+      mostrarNotas(textoActualizado, textoNotas);
+    }
+
+    cerrarModalHistoria();
+
+  } catch (error) {
+    console.error(error);
+    alert("Error de comunicación con el servidor al guardar la historia clínica.");
+  }
+}
+
+// Eventos de los enlaces "Agregar ..."
+if (btnAgregarAlergia) {
+  btnAgregarAlergia.addEventListener("click", function(e) {
+    e.preventDefault();
+    abrirModalHistoria({
+      campo:   "alergia",
+      titulo:  "AGREGAR ALERGIA",
+      etiqueta:"Alergia:"
+    });
+  });
+}
+
+if (btnAgregarAntecedente) {
+  btnAgregarAntecedente.addEventListener("click", function(e) {
+    e.preventDefault();
+    abrirModalHistoria({
+      campo:   "antecedente",
+      titulo:  "AGREGAR ANTECEDENTE MÉDICO",
+      etiqueta:"Antecedente:"
+    });
+  });
+}
+
+if (btnAgregarMedicamento) {
+  btnAgregarMedicamento.addEventListener("click", function(e) {
+    e.preventDefault();
+    abrirModalHistoria({
+      campo:   "medicamento",
+      titulo:  "AGREGAR MEDICAMENTO",
+      etiqueta:"Medicamento:"
+    });
+  });
+}
+
+if (btnAgregarNota) {
+  btnAgregarNota.addEventListener("click", function(e) {
+    e.preventDefault();
+    abrirModalHistoria({
+      campo:   "nota",
+      titulo:  "AGREGAR NOTA DE EVOLUCIÓN",
+      etiqueta:"Nota de evolución:"
+    });
+  });
+}
+
+// Botones del modal
+btnModalCancelar.addEventListener("click", function() {
+  cerrarModalHistoria();
+});
+
+btnModalGuardar.addEventListener("click", function() {
+  guardarDesdeModal();
+});
+
+// Cerrar modal al hacer clic en el fondo oscuro (opcional)
+modalHistoria.addEventListener("click", function(e) {
+  if (e.target === modalHistoria) {
+    cerrarModalHistoria();
+  }
+});
+
+// ---------------------------------------------
+// Adjuntos de Historia Clínica (HU-12)
+// ---------------------------------------------
+function abrirModalAdjuntos() {
+  modalAdjuntos.style.display = "flex";
+  cargarAdjuntosHistoria();
+}
+
+function cerrarModalAdjuntos() {
+  modalAdjuntos.style.display = "none";
+}
+
+// Cargar lista de adjuntos desde el servidor
+async function cargarAdjuntosHistoria() {
+  const idPaciente = obtenerParametro("idPaciente");
+  if (!idPaciente) {
+    alert("No se especificó el paciente en la URL (idPaciente).");
+    return;
+  }
+
+  tablaAdjuntosBody.innerHTML = "<tr><td colspan='3'>Cargando...</td></tr>";
+
+  try {
+    const r = await fetch("/api/get_adjuntos_historia.php?idPaciente=" + encodeURIComponent(idPaciente));
+    const texto = await r.text();
+
+    let datos;
+    try {
+      datos = JSON.parse(texto);
+    } catch (e) {
+      console.error("Respuesta no válida en get_adjuntos_historia:", texto);
+      tablaAdjuntosBody.innerHTML = "<tr><td colspan='3'>Error al interpretar la respuesta.</td></tr>";
+      return;
+    }
+
+    if (!datos.ok) {
+      tablaAdjuntosBody.innerHTML = "<tr><td colspan='3'>No se pudieron obtener los adjuntos.</td></tr>";
+      return;
+    }
+
+    const adjuntos = datos.adjuntos || [];
+
+    if (adjuntos.length === 0) {
+      tablaAdjuntosBody.innerHTML = "<tr><td colspan='3'>Sin archivos adjuntos.</td></tr>";
+      return;
+    }
+
+    tablaAdjuntosBody.innerHTML = "";
+
+    adjuntos.forEach(adj => {
+      const tr = document.createElement("tr");
+
+      const tdNombre = document.createElement("td");
+      tdNombre.textContent = adj.url ? adj.url.split("/").pop() : adj.idAdjunto;
+
+      const tdFecha = document.createElement("td");
+      tdFecha.textContent = adj.fechaArchivo || "N/D";
+
+      const tdDesc = document.createElement("td");
+      if (adj.url) {
+        const a = document.createElement("a");
+        a.href = adj.url;
+        a.target = "_blank";
+        a.textContent = "Descargar";
+        tdDesc.appendChild(a);
+      } else {
+        tdDesc.textContent = "-";
+      }
+
+      tr.appendChild(tdNombre);
+      tr.appendChild(tdFecha);
+      tr.appendChild(tdDesc);
+
+      tablaAdjuntosBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(err);
+    tablaAdjuntosBody.innerHTML = "<tr><td colspan='3'>Error al comunicarse con el servidor.</td></tr>";
+  }
+}
+
+// Subir nuevo archivo
+async function subirAdjuntoHistoria() {
+  const idPaciente = obtenerParametro("idPaciente");
+  if (!idPaciente) {
+    alert("No se especificó el paciente en la URL (idPaciente).");
+    return;
+  }
+
+  const archivo = inputArchivoAdj.files[0];
+  if (!archivo) {
+    alert("Selecciona un archivo antes de subir.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("idPaciente", idPaciente);
+  formData.append("archivo", archivo);
+
+  try {
+    const r = await fetch("/api/subir_adjunto_historia.php", {
+      method: "POST",
+      body: formData
+    });
+
+    const texto = await r.text();
+
+    let datos;
+    try {
+      datos = JSON.parse(texto);
+    } catch (e) {
+      console.error("Respuesta no válida al subir adjunto:", texto);
+      alert("Error al interpretar la respuesta del servidor al subir el archivo.");
+      return;
+    }
+
+    if (!datos.ok) {
+      alert(datos.error || "No se pudo subir el archivo.");
+      return;
+    }
+
+    // Limpiar input y recargar lista
+    inputArchivoAdj.value = "";
+    cargarAdjuntosHistoria();
+
+  } catch (err) {
+    console.error(err);
+    alert("Error de comunicación con el servidor al subir el archivo.");
+  }
+}
+
+// Eventos para abrir/cerrar modal de adjuntos
+if (btnAdjuntos) {
+  btnAdjuntos.addEventListener("click", function() {
+    abrirModalAdjuntos();
+  });
+}
+
+btnCerrarAdjuntos.addEventListener("click", function() {
+  cerrarModalAdjuntos();
+});
+
+// Cerrar al hacer clic en el fondo oscuro (opcional)
+modalAdjuntos.addEventListener("click", function(e) {
+  if (e.target === modalAdjuntos) {
+    cerrarModalAdjuntos();
+  }
+});
+
+// Botón "Subir" del modal
+btnSubirAdjunto.addEventListener("click", function() {
+  subirAdjuntoHistoria();
+});
+
+
+function abrirModalRecetas() {
+  modalRecetas.style.display = "flex";
+  recetaMsg.textContent = "";
+  cargarRecetasHistoria();
+}
+
+function cerrarModalRecetas() {
+  modalRecetas.style.display = "none";
+  inputArchivoReceta.value = "";
+  recetaMsg.textContent = "";
+}
+
+async function cargarRecetasHistoria() {
+const idPaciente = obtenerParametro("idPaciente");
+
+  if (!idPaciente) return;
+
+  tablaRecetasBody.innerHTML = "<tr><td colspan='3' style='padding:8px;'>Cargando...</td></tr>";
+
+  try {
+    const r = await fetch("/api/get_recetas_historia.php?idPaciente=" + encodeURIComponent(idPaciente));
+    const text = await r.text();
+    
+
+    let datos;
+    try { datos = JSON.parse(text); }
+    catch(e){
+      console.error("Respuesta no JSON get_recetas_historia:", text);
+      tablaRecetasBody.innerHTML = "<tr><td colspan='3' style='padding:8px;'>Error al interpretar respuesta.</td></tr>";
+      return;
+    }
+
+    if (!datos.ok) {
+      tablaRecetasBody.innerHTML = "<tr><td colspan='3' style='padding:8px;'>No se pudieron obtener las recetas.</td></tr>";
+      return;
+    }
+
+    const recetas = datos.recetas || [];
+    if (recetas.length === 0) {
+      tablaRecetasBody.innerHTML = "<tr><td colspan='3' style='padding:8px;'>Sin recetas registradas.</td></tr>";
+      return;
+    }
+
+    tablaRecetasBody.innerHTML = "";
+    recetas.forEach(rc => {
+      const tr = document.createElement("tr");
+
+      const tdNombre = document.createElement("td");
+      tdNombre.style.padding = "8px";
+      tdNombre.textContent = rc.url ? rc.url.split("/").pop() : (rc.idAdjunto || "receta");
+
+      const tdFecha = document.createElement("td");
+      tdFecha.style.padding = "8px";
+      tdFecha.textContent = rc.fechaArchivo || "N/D";
+
+      const tdDesc = document.createElement("td");
+      tdDesc.style.padding = "8px";
+
+      if (rc.url) {
+        const a = document.createElement("a");
+        a.href = rc.url;
+        a.target = "_blank";
+        a.textContent = "Descargar";
+        tdDesc.appendChild(a);
+      } else {
+        tdDesc.textContent = "-";
+      }
+
+      tr.appendChild(tdNombre);
+      tr.appendChild(tdFecha);
+      tr.appendChild(tdDesc);
+      tablaRecetasBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(err);
+    tablaRecetasBody.innerHTML = "<tr><td colspan='3' style='padding:8px;'>Error de comunicación.</td></tr>";
+  }
+}
+
+async function subirRecetaHistoria() {
+const idPaciente = obtenerParametro("idPaciente");
+
+  if (!idPaciente) {
+    alert("Falta idPaciente en la URL.");
+    return;
+  }
+
+  const archivo = inputArchivoReceta.files[0];
+  if (!archivo) {
+    alert("Selecciona un archivo antes de subir.");
+    return;
+  }
+
+  recetaMsg.style.color = "#555";
+  recetaMsg.textContent = "Subiendo receta...";
+
+  const formData = new FormData();
+  formData.append("idPaciente", idPaciente);
+  formData.append("archivo", archivo);
+
+  try {
+    const r = await fetch("/api/subir_receta_historia.php", {
+      method: "POST",
+      body: formData
+    });
+
+    const text = await r.text();
+    console.log("Respuesta cruda subir_receta_historia:", text);
+alert("RESPUESTA CRUDA:\n\n" + text);
+
+
+    let datos;
+    try { datos = JSON.parse(text); }
+    catch(e){
+      console.error("Respuesta no JSON subir_receta_historia:", text);
+      recetaMsg.style.color = "#b00";
+      recetaMsg.textContent = "Error al interpretar respuesta del servidor.";
+      return;
+    }
+
+    if (!datos.ok) {
+      recetaMsg.style.color = "#b00";
+      recetaMsg.textContent = datos.error || "No se pudo subir la receta.";
+      return;
+    }
+
+    recetaMsg.style.color = "#0a7";
+    recetaMsg.textContent = "Receta subida correctamente.";
+
+    inputArchivoReceta.value = "";
+    cargarRecetasHistoria();
+
+  } catch (err) {
+    console.error(err);
+    recetaMsg.style.color = "#b00";
+    recetaMsg.textContent = "Error de comunicación al subir.";
+  }
+}
+
+
+// ---------------------------------------------
+// Eventos del MODAL DE RECETAS (CONEXIÓN FINAL)
+// ---------------------------------------------
+
+if (btnRecetas) {
+  btnRecetas.addEventListener("click", function () {
+    abrirModalRecetas();
+  });
+}
+
+
+btnCerrarRecetas.addEventListener("click", function () {
+  cerrarModalRecetas();
+});
+
+modalRecetas.addEventListener("click", function (e) {
+  if (e.target === modalRecetas) {
+    cerrarModalRecetas();
+  }
+});
+
+btnSubirReceta.addEventListener("click", function () {
+  subirRecetaHistoria();
+});
+
+// ---------------------------------------------
+// Ejecutar carga inicial
+// ---------------------------------------------
+cargarHistoriaClinica();
+</script>

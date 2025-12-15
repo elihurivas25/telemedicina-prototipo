@@ -191,8 +191,76 @@ try {
     // 6. Confirmar transacción
     $conn->commit();
 
+
+// === AUDITORÍA (SIMULADA) - Verificación de correo ===
+try {
+    // Generar idLogAuditoria consecutivo tipo logN
+$stmtUltLog = $conn->query("
+    SELECT idLogAuditoria
+    FROM logauditoria
+    WHERE idLogAuditoria LIKE 'log%'
+    ORDER BY CAST(SUBSTRING(idLogAuditoria, 4) AS UNSIGNED) DESC
+    LIMIT 1
+");
+
+$filaUltLog = $stmtUltLog->fetch(PDO::FETCH_ASSOC);
+
+$nuevoNumLog = 1;
+if ($filaUltLog && isset($filaUltLog["idLogAuditoria"])) {
+    $ultimo = $filaUltLog["idLogAuditoria"]; // ej: log55
+    $nuevoNumLog = ((int)substr($ultimo, 3)) + 1;
+}
+
+$idLog = "log" . $nuevoNumLog;
+
+
+    $accion = "VERIFICACION_EMAIL_SIMULADA";
+
+    $detalleArr = [
+        "evento"  => "verificacion_email_simulada",
+        "mensaje" => "Registro correcto. Se muestra instrucción de verificación por correo (simulada).",
+        "email"   => $email
+    ];
+    $detalle = json_encode($detalleArr, JSON_UNESCAPED_UNICODE);
+
+    $ip = $_SERVER["REMOTE_ADDR"] ?? "0.0.0.0";
+
+    $sql = "
+      INSERT INTO logauditoria
+        (idLogAuditoria, idUsuario, accion, detalle, `timestamp`, ip)
+      VALUES
+        (:idLog, :idUsuario, :accion, CAST(:detalle AS JSON), NOW(), :ip)
+    ";
+
+    $insLog = $conn->prepare($sql);
+
+    if (!$insLog) {
+        $err = $conn->errorInfo();
+        throw new Exception("prepare() falló: " . ($err[2] ?? "SQL inválido"));
+    }
+
+    $insLog->execute([
+        ":idLog"     => $idLog,
+        ":idUsuario" => $idUsuario,
+        ":accion"    => $accion,
+        ":detalle"   => $detalle,
+        ":ip"        => $ip
+    ]);
+
+} catch (Throwable $e) {
+    echo "<pre style='background:#fee;border:1px solid #f99;padding:12px;border-radius:8px;'>
+Auditoría E1 falló:
+" . htmlspecialchars($e->getMessage()) . "
+</pre>";
+}
+
+
+
+
     echo "<h2>Registro completado correctamente ✔</h2>";
-    echo "<p>Ya puedes iniciar sesión con tu correo y contraseña.</p>";
+echo "<p><strong>IMPORTANTE:</strong> Para continuar, revisa tu bandeja de entrada y acepta la verificación de correo (simulado).</p>";
+echo "<p>Después, vuelve e inicia sesión con tu correo y contraseña.</p>";
+
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) {

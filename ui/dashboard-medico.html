@@ -1,0 +1,341 @@
+<!--
+  Página: Próximas citas (Dashboard Médico)
+  Rol: MEDICO
+  Propósito: Mostrar al médico sus próximas citas por filtro (hoy, mañana, 48 horas, 7 días o todas),
+             permitir el acceso a la sala de consulta cuando el horario/estado lo permite, y mostrar
+             un recordatorio simulado de la próxima consulta confirmada.
+-->
+
+<section id="bloqueProximasCitas" style="max-width: 950px; margin: 0 auto;">
+
+  <h3 style="text-align:center; margin-top:0;">PRÓXIMAS CITAS</h3>
+
+  <!-- Filtros de la agenda: selección única para mostrar citas por rango de tiempo -->
+  <div style="display:flex; justify-content:center; gap:35px; margin: 10px 0 18px 0; flex-wrap:wrap;">
+    <label><input type="radio" name="filtroCitas" value="hoy" checked> HOY</label>
+    <label><input type="radio" name="filtroCitas" value="manana"> MAÑANA</label>
+    <label><input type="radio" name="filtroCitas" value="48h"> 48 HORAS</label>
+    <label><input type="radio" name="filtroCitas" value="7d"> 7 DÍAS</label>
+    <label><input type="radio" name="filtroCitas" value="todas"> TODAS</label>
+  </div>
+
+<div id="tmRecordatorioMedico" style="
+  display:none;
+  background:#eef6ff;
+  border:1px solid #60a5fa;
+  padding:12px 14px;
+  border-radius:12px;
+  margin-bottom:12px;">
+</div>
+
+
+  <!-- Tabla de citas (listado principal) -->
+  <div style="border:1px solid #ddd; border-radius:16px; padding:16px;">
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;">
+          <th style="padding:10px 6px;">Fecha</th>
+          <th style="padding:10px 6px;">Hora</th>
+          <th style="padding:10px 6px;">Paciente</th>
+          <th style="padding:10px 6px;">Historia clínica</th>
+           <th style="padding:10px 6px;">Acción</th>
+         
+        </tr>
+      </thead>
+      <tbody id="tablaCitasMedico">
+        <tr><td colspan="6" style="padding:10px;">Cargando...</td></tr>
+      </tbody>
+    </table>
+
+    <div id="msgCitasMedico" style="margin-top:10px; font-size:14px; color:#666;"></div>
+  </div>
+
+</section>
+
+<script>
+(function() {
+
+  const tbody = document.getElementById("tablaCitasMedico");
+  const msg   = document.getElementById("msgCitasMedico");
+  const boxRecMed = document.getElementById("tmRecordatorioMedico"); // contenedor del recordatorio en pantalla
+
+  function pad2(n){ return String(n).padStart(2, "0"); }
+
+  function formatearFecha(iso) {
+    if (!iso) return "-";
+    const d = new Date(iso.replace(" ", "T"));
+    if (isNaN(d.getTime())) return iso;
+    const dd = pad2(d.getDate());
+    const mm = pad2(d.getMonth()+1);
+    const yyyy = d.getFullYear();
+    return `${dd} - ${mm} - ${yyyy}`;
+  }
+
+  function formatearHora(iso) {
+    if (!iso) return "-";
+    const d = new Date(iso.replace(" ", "T"));
+    if (isNaN(d.getTime())) return iso;
+    let h = d.getHours();
+    const m = pad2(d.getMinutes());
+    const ampm = h >= 12 ? "P.M" : "A.M";
+    h = h % 12; if (h === 0) h = 12;
+    return `${pad2(h)}:${m} ${ampm}`;
+  }
+
+  function parseFechaMySQL(iso) {
+    if (!iso) return null;
+    const d = new Date(iso.replace(" ", "T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function esAccesoSalaPermitido(cita, minutosAntes = 10) {
+    const estado = (cita.estado || "").trim();
+    if (estado !== "Confirmada" && estado !== "EnCurso") return false;
+
+    const inicio = parseFechaMySQL(cita.inicio);
+    const fin    = parseFechaMySQL(cita.fin);
+    if (!inicio || !fin) return false;
+
+    const ahora = new Date();
+    const ventanaInicio = new Date(inicio.getTime() - (minutosAntes * 60 * 1000));
+    const ventanaFin    = fin;
+
+    return (ahora >= ventanaInicio && ahora <= ventanaFin);
+  }
+
+  async function validarYEntrarSalaMedico(idCita){
+    try {
+      const r = await fetch("/api/permitir_entrar_sala_medico.php?idCita=" + encodeURIComponent(idCita), { cache: "no-store" });
+      const text = await r.text();
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        console.error("Respuesta no JSON permitir_entrar_sala_medico:", text);
+        alert("No se pudo validar el acceso a la sala.");
+        return;
+      }
+
+      if (!json.ok) {
+        alert(json.error || "No se puede iniciar la consulta.");
+        return;
+      }
+
+      const cita = json.cita;
+      const url = "/sala-consulta/?" +
+        "idCita=" + encodeURIComponent(cita.idCita) +
+        "&idPaciente=" + encodeURIComponent(cita.idPaciente) +
+        "&canal=" + encodeURIComponent(cita.canal || "");
+
+      window.location.href = url;
+
+    } catch(err){
+      console.error(err);
+      alert("Error de comunicación al validar la sala.");
+    }
+  }
+
+  // Helpers para el recordatorio del médico
+  function parseInicioMedico(c){
+    if (!c || !c.inicio) return null;
+    const d = new Date(c.inicio.replace(" ", "T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function horaBonitaMedico(d){
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+  function mismoDiaMedico(a,b){
+    return a.getFullYear()===b.getFullYear() &&
+           a.getMonth()===b.getMonth() &&
+           a.getDate()===b.getDate();
+  }
+
+  // Recordatorio médico (simulado): muestra un aviso si la próxima cita confirmada es hoy/mañana o en menos de 24h
+  function mostrarRecordatorioMedico(citas){
+    if (!boxRecMed) return;
+
+    const ahora = new Date();
+
+    const confirmadas = (citas || []).filter(c => (c.estado || "").trim() === "Confirmada");
+
+    const futuras = confirmadas
+      .map(c => ({...c, _ini: parseInicioMedico(c)}))
+      .filter(c => c._ini && c._ini >= ahora)
+      .sort((a,b) => a._ini - b._ini);
+
+    if (!futuras.length) {
+      boxRecMed.style.display = "none";
+      boxRecMed.innerHTML = "";
+      return;
+    }
+
+    const proxima = futuras[0];
+    const ini = proxima._ini;
+
+    const hoy = mismoDiaMedico(ahora, ini);
+    const manana = mismoDiaMedico(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()+1), ini);
+
+    const diffHoras = (ini - ahora) / 36e5;
+
+    let titulo = "🔔 Recordatorio de consulta";
+    let cuerpo = "";
+
+    if (diffHoras <= 1 && diffHoras > 0) {
+      cuerpo = `Tienes una consulta en <strong>menos de 1 hora</strong> (${horaBonitaMedico(ini)}).`;
+    } else if (hoy) {
+      cuerpo = `Tienes una consulta <strong>HOY</strong> a las <strong>${horaBonitaMedico(ini)}</strong>.`;
+    } else if (manana || diffHoras <= 24) {
+      cuerpo = `Tienes una consulta <strong>MAÑANA</strong> a las <strong>${horaBonitaMedico(ini)}</strong>.`;
+    } else {
+      boxRecMed.style.display = "none";
+      boxRecMed.innerHTML = "";
+      return;
+    }
+
+    const paciente = proxima.nombrePaciente ? ` con <strong>${proxima.nombrePaciente}</strong>` : "";
+    const correoSimulado = `<br><small>📧 Se ha enviado un recordatorio a tu correo electrónico registrado.</small>`;
+
+    boxRecMed.innerHTML = `${titulo}<br>${cuerpo}${paciente}${correoSimulado}`;
+    boxRecMed.style.display = "block";
+  }
+
+  function crearFilaCita(c) {
+    const tr = document.createElement("tr");
+    tr.style.borderTop = "1px solid #eee";
+
+    const tdFecha = document.createElement("td");
+    tdFecha.style.padding = "10px 6px";
+    tdFecha.textContent = formatearFecha(c.inicio);
+
+    const tdHora = document.createElement("td");
+    tdHora.style.padding = "10px 6px";
+    tdHora.textContent = formatearHora(c.inicio);
+
+    const tdPaciente = document.createElement("td");
+    tdPaciente.style.padding = "10px 6px";
+    tdPaciente.textContent = c.nombrePaciente || "-";
+
+    const tdHC = document.createElement("td");
+    tdHC.style.padding = "10px 6px";
+    tdHC.innerHTML = `<a href="/historia-clinica/?idPaciente=${encodeURIComponent(c.idPaciente)}" style="text-decoration:underline;">HISTORIA CLÍNICA</a>`;
+
+    const tdAccion = document.createElement("td");
+    tdAccion.style.padding = "10px 6px";
+    tdAccion.style.textAlign = "right";
+
+    const btn = document.createElement("a");
+    btn.textContent = "Entrar a la Sala";
+    btn.href = "#";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      validarYEntrarSalaMedico(c.idCita);
+    });
+
+    btn.style.display = "inline-block";
+    btn.style.padding = "8px 14px";
+    btn.style.borderRadius = "20px";
+    btn.style.background = "#0b57d0";
+    btn.style.color = "#fff";
+    btn.style.textDecoration = "none";
+
+    const permitido = esAccesoSalaPermitido(c, 10);
+
+    if (!permitido) {
+      const inicio = parseFechaMySQL(c.inicio);
+      const fin    = parseFechaMySQL(c.fin);
+      const ahora  = new Date();
+
+      btn.style.background = "#999";
+      btn.style.pointerEvents = "none";
+      btn.style.opacity = "0.75";
+
+      if (inicio && ahora < inicio) {
+        btn.textContent = "Aún no disponible";
+        btn.title = "Disponible 10 minutos antes de la cita.";
+      } 
+      else if (fin && ahora > fin) {
+        btn.textContent = "Concluida";
+        btn.title = "La cita ya concluyó.";
+      } 
+      else {
+        btn.textContent = "No disponible";
+        btn.title = "La cita no está disponible en este momento.";
+      }
+    }
+
+    tdAccion.appendChild(btn);
+
+    tr.appendChild(tdFecha);
+    tr.appendChild(tdHora);
+    tr.appendChild(tdPaciente);
+    tr.appendChild(tdHC);
+    tr.appendChild(tdAccion);
+
+    return tr;
+  }
+
+  async function cargarCitas(filtro) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:10px;">Cargando...</td></tr>`;
+    msg.textContent = "";
+
+    // Mientras no haya datos, ocultamos el recordatorio
+    if (boxRecMed) { boxRecMed.style.display="none"; boxRecMed.innerHTML=""; }
+
+    try {
+      const url = "/api/get_proximas_citas_medico.php?filtro=" + encodeURIComponent(filtro) + "&_=" + Date.now();
+      const r = await fetch(url, { cache: "no-store" });
+
+      console.log("HTTP status:", r.status);
+
+      const t = await r.text();
+      console.log("Respuesta cruda:", t);
+
+      let json;
+      try {
+        json = JSON.parse(t);
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#b00;">Error al interpretar respuesta.</td></tr>`;
+        return;
+      }
+
+      if (!json.ok) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#b00;">${json.error || "No se pudo cargar"}</td></tr>`;
+        return;
+      }
+
+      const citas = json.citas || [];
+
+      // Con los datos ya cargados, se calcula el recordatorio
+      mostrarRecordatorioMedico(citas);
+
+      if (citas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:10px;">No hay citas en este filtro.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      citas.forEach(c => tbody.appendChild(crearFilaCita(c)));
+
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#b00;">Error de comunicación.</td></tr>`;
+    }
+  }
+
+  // Cambios de filtro (radios)
+  document.querySelectorAll("input[name='filtroCitas']").forEach(radio => {
+    radio.addEventListener("change", () => cargarCitas(radio.value));
+  });
+
+  // Carga inicial
+  cargarCitas("hoy");
+
+  // Refresco automático cada minuto para mantener la lista actualizada
+  setInterval(() => {
+    const seleccionado = document.querySelector("input[name='filtroCitas']:checked");
+    const filtro = seleccionado ? seleccionado.value : "todas";
+    cargarCitas(filtro);
+  }, 60000);
+
+})();
+</script>

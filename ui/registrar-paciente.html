@@ -1,0 +1,91 @@
+<!--
+  Página: Registro de paciente
+  Rol: PACIENTE
+  Propósito: Permitir el registro de nuevos pacientes en el sistema de telemedicina,
+             capturando datos personales y credenciales de acceso. El formulario envía
+             la información al endpoint /api/registro_paciente.php y contempla la
+             aceptación del Aviso de Privacidad como requisito para completar el registro.
+-->
+
+<section class="tm-page">
+
+  <form action="https://telemedproyecto.com/api/registro_paciente.php"
+        method="POST"
+        class="form-registro-paciente tm-card">
+
+    <h2 class="tm-title tm-center">
+      REGISTRARTE<br>COMO PACIENTE
+    </h2>
+
+    <!-- Datos personales -->
+    <label for="nombre">Nombre completo</label>
+    <input type="text" id="nombre" name="nombre" required>
+
+    <div class="fila-doble">
+      <div>
+        <label for="telefono">Teléfono</label>
+        <input type="tel" id="telefono" name="telefono" maxlength="10" required>
+      </div>
+
+      <div>
+        <label for="fecha_nacimiento">Fecha de nacimiento</label>
+        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required>
+      </div>
+    </div>
+
+    <label>Género</label>
+    <div class="grupo-genero">
+      <label><input type="radio" name="sexo" value="F" required> F</label>
+      <label><input type="radio" name="sexo" value="M"> M</label>
+      <label><input type="radio" name="sexo" value="Otro"> Otro</label>
+    </div>
+
+    <div class="tm-sep"></div>
+
+    <h3 class="tm-center tm-muted">Datos de acceso</h3>
+
+    <div class="fila-doble">
+      <div>
+        <label for="email">Correo electrónico</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div>
+        <label for="email_confirm">Confirmar correo electrónico</label>
+        <input type="email" id="email_confirm" name="email_confirm" required>
+      </div>
+    </div>
+
+    <div class="fila-doble">
+      <div>
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <div>
+        <label for="password_confirm">Confirmar contraseña</label>
+        <input type="password" id="password_confirm" name="password_confirm" required>
+      </div>
+    </div>
+
+    <label class="checkbox-linea tm-mt">
+      <input type="checkbox" name="acepta_privacidad" value="1" required>
+      Al registrarme, acepto el
+      <a href="https://telemedproyecto.com/aviso-privacidad/"
+         target="_blank" rel="noopener">
+        Aviso de Privacidad
+      </a>
+      y el uso adecuado de mis datos.
+    </label>
+
+    <button type="submit" class="tm-btn-primary tm-btn-block tm-mt">
+      Registrar
+    </button>
+
+    <p class="tm-center tm-mt" style="font-size:14px;">
+      ¿Ya tienes una cuenta?
+      <a href="/login" class="tm-link">Iniciar sesión</a>
+    </p>
+
+  </form>
+</section>

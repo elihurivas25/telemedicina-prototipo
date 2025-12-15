@@ -1,0 +1,126 @@
+<!--
+  Página: Agendar cita
+  Rol: PACIENTE
+  Propósito: Permitir al paciente seleccionar un médico según la especialidad elegida,
+             visualizar la información básica del médico y continuar al flujo de
+             selección de disponibilidad para agendar una cita.
+-->
+
+<section class="agendar-cita">
+
+  <h2 id="tituloAgendar">AGENDAR CITA</h2>
+  <p id="subtituloAgendar">
+    Selecciona el médico de tu preferencia para ver su disponibilidad.
+  </p>
+
+  <div id="contenedorTarjetas" style="margin-top:20px;">
+    Cargando médicos disponibles...
+  </div>
+
+</section>
+
+<script>
+// Obtiene la especialidad desde la URL (?especialidad=General)
+function obtenerEspecialidadDesdeURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("especialidad") || "";
+}
+
+// Actualiza el título y subtítulo según la especialidad seleccionada
+function actualizarTitulos(especialidad) {
+    const titulo = document.getElementById("tituloAgendar");
+    const subtitulo = document.getElementById("subtituloAgendar");
+
+    if (especialidad) {
+        titulo.textContent = "AGENDAR CITA - MEDICINA " + especialidad.toUpperCase();
+        subtitulo.textContent = "Selecciona el médico de tu preferencia para ver su disponibilidad.";
+    }
+}
+
+// Construye las tarjetas informativas de los médicos disponibles
+function construirTarjetas(medicos) {
+    const contenedor = document.getElementById("contenedorTarjetas");
+
+    if (!medicos || medicos.length === 0) {
+        contenedor.innerHTML = "<p>No hay médicos disponibles para esta especialidad.</p>";
+        return;
+    }
+
+    let html = '<div style="display:flex; flex-wrap:wrap; gap:20px;">';
+
+    medicos.forEach(m => {
+        html += `
+            <article style="flex:1 1 300px; border:1px solid #ddd; border-radius:12px; padding:20px;">
+                <h3 style="margin-top:0;">${m.nombre}</h3>
+                <p><strong>Especialidad:</strong> ${m.especialidad}</p>
+                <p><strong>Cédula:</strong> ${m.cedulaProfesional || 'No disponible'}</p>
+                <p><strong>Correo:</strong> ${m.email}</p>
+                <p><strong>Biografía:</strong><br>${m.bio || 'Sin biografía registrada.'}</p>
+                <button 
+                    type="button" 
+                    onclick="verDisponibilidad('${m.idMedico}')"
+                    style="margin-top:10px;">
+                    Ver disponibilidad
+                </button>
+            </article>
+        `;
+    });
+
+    html += '</div>';
+    contenedor.innerHTML = html;
+}
+
+// Redirige a la página donde se muestra la disponibilidad del médico seleccionado
+function verDisponibilidad(idMedico) {
+    const params = new URLSearchParams(window.location.search);
+    const especialidad = params.get("especialidad") || "";
+
+    // Ejemplo de destino: /disponibilidad-medico?idMedico=XXX&especialidad=General
+    window.location.href = "/disponibilidad-medico?idMedico=" + encodeURIComponent(idMedico) +
+                           "&especialidad=" + encodeURIComponent(especialidad);
+}
+
+// Consulta al backend los médicos disponibles según la especialidad
+async function cargarMedicos() {
+    const especialidad = obtenerEspecialidadDesdeURL();
+
+    if (!especialidad) {
+        document.getElementById("contenedorTarjetas").innerHTML =
+            "<p>No se especificó una especialidad.</p>";
+        return;
+    }
+
+    actualizarTitulos(especialidad);
+
+    try {
+        const respuesta = await fetch("/api/listar_medicos_por_especialidad.php?especialidad=" + encodeURIComponent(especialidad));
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida:", texto);
+            document.getElementById("contenedorTarjetas").innerHTML =
+                "<p>Error al interpretar la respuesta del servidor.</p>";
+            return;
+        }
+
+        if (!json.ok) {
+            document.getElementById("contenedorTarjetas").innerHTML =
+                "<p>" + (json.error || "No se pudieron obtener los médicos.") + "</p>";
+            return;
+        }
+
+        construirTarjetas(json.medicos);
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("contenedorTarjetas").innerHTML =
+            "<p>Error de comunicación con el servidor.</p>";
+    }
+}
+
+// Ejecutar la carga de médicos al abrir la página
+cargarMedicos();
+</script>

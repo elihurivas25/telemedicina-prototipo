@@ -1,0 +1,270 @@
+<!--
+  Página: Sala de consulta
+  Rol: PACIENTE / MEDICO (según sesión y cita)
+  Propósito: Simular la atención en línea de una cita (video y chat), validando el acceso por idCita desde la URL.
+             Permite intercambio de mensajes, finalizar la consulta y adjuntar archivos a la historia clínica (modo prototipo).
+-->
+
+<section id="sala-consulta" style="max-width:1100px; margin:0 auto; padding:10px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">Sala de consulta</h2>
+      <div id="salaInfo" style="margin-top:6px; font-size:14px; color:#555;"></div>
+      <div style="margin-top:6px; font-size:13px; color:#777;">
+        Videollamada y chat simulados para fines del prototipo.
+      </div>
+      <div id="salaError" style="margin-top:8px; font-size:14px; color:#b00; display:none;"></div>
+    </div>
+
+    <button id="btnSalirSala" type="button"
+      style="padding:10px 14px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">
+      Volver
+    </button>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:14px; margin-top:14px;">
+    <!-- VIDEO SIMULADO -->
+    <div style="border:1px solid #ddd; border-radius:16px; padding:12px;">
+      <div style="font-weight:700; margin-bottom:10px;">Videollamada (simulada)</div>
+
+      <div style="position:relative; width:100%; aspect-ratio: 16/9; border-radius:14px; background:#f3f3f3; overflow:hidden;">
+        <div id="videoMainLabel" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#777;">
+          Cámara del paciente (placeholder)
+        </div>
+
+        <div id="videoMiniLabel" style="position:absolute; right:10px; bottom:10px; width:34%; aspect-ratio: 16/9; border-radius:12px; background:#e9e9e9;
+                    display:flex; align-items:center; justify-content:center; color:#666; border:1px solid #d8d8d8;">
+          Médico (placeholder)
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button type="button" id="btnCamara" style="padding:10px 12px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">Cámara</button>
+        <button type="button" id="btnMicro"  style="padding:10px 12px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">Micrófono</button>
+        <button type="button" id="btnColgar" style="padding:10px 12px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">Finalizar</button>
+
+        <div style="margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <input type="file" id="archivoCompartir">
+          <button type="button" id="btnCompartir" style="padding:10px 12px; border-radius:12px; border:none; background:#0b57d0; color:#fff; cursor:pointer;">
+            Adjuntar
+          </button>
+        </div>
+      </div>
+
+      <div id="salaMsg" style="margin-top:10px; font-size:14px; color:#0a7;"></div>
+    </div>
+
+    <!-- CHAT SIMULADO -->
+    <div style="border:1px solid #ddd; border-radius:16px; padding:12px; display:flex; flex-direction:column; min-height:420px;">
+      <div style="font-weight:700; margin-bottom:10px;">Chat (simulado)</div>
+
+      <div id="chatBox" style="flex:1; border:1px solid #eee; border-radius:12px; padding:10px; overflow:auto; background:#fafafa;"></div>
+
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <input id="chatInput" type="text" placeholder="Escribe un mensaje..."
+               style="flex:1; padding:10px; border-radius:12px; border:1px solid #ccc;">
+        <button id="btnEnviarChat" type="button"
+                style="padding:10px 12px; border-radius:12px; border:none; background:#0b57d0; color:#fff; cursor:pointer;">
+          Enviar
+        </button>
+      </div>
+
+      <button id="btnAutoRespuesta" type="button"
+              style="margin-top:8px; padding:10px 12px; border-radius:12px; border:1px solid #ccc; background:#fff; cursor:pointer;">
+        Simular respuesta del paciente
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  const params = new URLSearchParams(window.location.search);
+  const idCita = params.get("idCita");
+  const idPacienteURL = params.get("idPaciente");
+  const canalURL = params.get("canal") || "";
+
+  const salaInfo  = document.getElementById("salaInfo");
+  const salaError = document.getElementById("salaError");
+  const btnSalir  = document.getElementById("btnSalirSala");
+  const salaMsg   = document.getElementById("salaMsg");
+
+  const videoMainLabel = document.getElementById("videoMainLabel");
+  const videoMiniLabel = document.getElementById("videoMiniLabel");
+
+  const chatBox = document.getElementById("chatBox");
+  const chatInput = document.getElementById("chatInput");
+  const btnEnviarChat = document.getElementById("btnEnviarChat");
+  const btnAuto = document.getElementById("btnAutoRespuesta");
+
+  const inputArchivo = document.getElementById("archivoCompartir");
+  const btnCompartir = document.getElementById("btnCompartir");
+
+  const btnCamara = document.getElementById("btnCamara");
+  const btnMicro  = document.getElementById("btnMicro");
+  const btnColgar = document.getElementById("btnColgar");
+
+  console.log("Sala de consulta: script cargado", { idCita, idPacienteURL, canalURL });
+
+  function addMsg(quien, texto){
+    if (!chatBox) return;
+    const row = document.createElement("div");
+    row.style.marginBottom = "8px";
+    row.innerHTML = `<strong>${quien}:</strong> <span>${texto}</span>`;
+    chatBox.appendChild(row);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function bloquearSala(mensaje){
+    if (salaError) {
+      salaError.style.display = "block";
+      salaError.textContent = mensaje || "No se puede acceder a la sala.";
+    }
+    if (salaMsg) salaMsg.textContent = "";
+
+    const toDisable = [btnCamara, btnMicro, btnColgar, btnCompartir, btnEnviarChat, btnAuto, chatInput, inputArchivo];
+    toDisable.forEach(el => {
+      if (el) {
+        el.disabled = true;
+        el.style.opacity = "0.55";
+      }
+    });
+  }
+
+  async function validarAcceso(){
+    if (!idCita) {
+      bloquearSala("Falta idCita en la URL.");
+      return null;
+    }
+
+    try {
+      const r = await fetch("/api/permitir_entrar_sala.php?idCita=" + encodeURIComponent(idCita));
+      const text = await r.text();
+      console.log("permitir_entrar_sala raw:", text);
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        bloquearSala("No se pudo interpretar la respuesta del servidor.");
+        return null;
+      }
+
+      if (!json.ok) {
+        bloquearSala(json.error || "Acceso denegado.");
+        return null;
+      }
+
+      return json.cita;
+
+    } catch(err){
+      console.error(err);
+      bloquearSala("Error de comunicación al validar acceso.");
+      return null;
+    }
+  }
+
+  (async function init(){
+    if (btnSalir) btnSalir.addEventListener("click", () => window.history.back());
+
+    // Si por algo faltan elementos, se reporta en consola
+    const faltantes = [];
+    ["chatBox","chatInput","btnEnviarChat","btnAutoRespuesta","btnCompartir"].forEach(id=>{
+      if (!document.getElementById(id)) faltantes.push(id);
+    });
+    if (faltantes.length) console.warn(" Faltan IDs en HTML:", faltantes);
+
+    // Validar acceso
+    const cita = await validarAcceso();
+    if (!cita) return;
+
+    const idPaciente = cita.idPaciente || idPacienteURL || "";
+    const canal = cita.canal || canalURL || "";
+
+    if (salaInfo) {
+      salaInfo.textContent =
+        "Cita: " + (cita.idCita || idCita) +
+        " | Paciente: " + (idPaciente || "N/D") +
+        (canal ? " | Canal: " + canal : "") +
+        (cita.nombreMedico ? " | Médico: " + cita.nombreMedico : "");
+    }
+
+    if ((canal || "").toLowerCase() === "chat") {
+      if (videoMainLabel) videoMainLabel.textContent = "Consulta por chat (simulada)";
+      if (videoMiniLabel) videoMiniLabel.textContent = "Sin video";
+    }
+
+    // Mensajes iniciales (para indicar funcionamiento del chat)
+    addMsg("Médico", "Buenas tardes, ¿cómo se siente hoy?");
+    addMsg("Paciente", "Buenas tardes doctor, me siento mejor.");
+
+    // Enviar chat
+    function enviarChat(){
+      const t = (chatInput && chatInput.value ? chatInput.value : "").trim();
+      if (!t) return;
+      addMsg("Yo", t);
+      chatInput.value = "";
+    }
+
+    if (btnEnviarChat) btnEnviarChat.addEventListener("click", enviarChat);
+    if (chatInput) chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") enviarChat();
+    });
+
+    if (btnAuto) btnAuto.addEventListener("click", () => {
+      addMsg("Paciente", "Entendido, gracias doctor.");
+    });
+
+    // Botones video simulados
+    if (btnCamara) btnCamara.addEventListener("click", () => {
+      if (salaMsg) { salaMsg.style.color = "#555"; salaMsg.textContent = "Cámara (simulada) alternada."; }
+    });
+    if (btnMicro) btnMicro.addEventListener("click", () => {
+      if (salaMsg) { salaMsg.style.color = "#555"; salaMsg.textContent = "Micrófono (simulado) alternado."; }
+    });
+    if (btnColgar) btnColgar.addEventListener("click", () => {
+      if (salaMsg) { salaMsg.style.color = "#555"; salaMsg.textContent = "Consulta finalizada (simulada)."; }
+      setTimeout(()=> window.history.back(), 700);
+    });
+
+    // Adjuntar archivo a la historia clínica (prototipo)
+    if (btnCompartir) btnCompartir.addEventListener("click", async () => {
+      const archivo = inputArchivo && inputArchivo.files ? inputArchivo.files[0] : null;
+      if (!archivo) { alert("Selecciona un archivo."); return; }
+
+      const fd = new FormData();
+      fd.append("idPaciente", idPaciente);
+      fd.append("archivo", archivo);
+
+      if (salaMsg) { salaMsg.style.color = "#555"; salaMsg.textContent = "Subiendo archivo..."; }
+
+      try {
+        const r = await fetch("/api/subir_adjunto_historia.php", { method:"POST", body: fd });
+        const text = await r.text();
+        console.log("subir_adjunto_historia raw:", text);
+
+        let json;
+        try { json = JSON.parse(text); }
+        catch(e){
+          if (salaMsg) { salaMsg.style.color="#b00"; salaMsg.textContent="Respuesta no válida del servidor."; }
+          return;
+        }
+
+        if (!json.ok) {
+          if (salaMsg) { salaMsg.style.color="#b00"; salaMsg.textContent = json.error || "No se pudo adjuntar el archivo."; }
+          return;
+        }
+
+        if (salaMsg) { salaMsg.style.color="#0a7"; salaMsg.textContent="Archivo adjuntado correctamente."; }
+        if (inputArchivo) inputArchivo.value = "";
+
+      } catch(err){
+        console.error(err);
+        if (salaMsg) { salaMsg.style.color="#b00"; salaMsg.textContent="Error de comunicación al adjuntar."; }
+      }
+    });
+
+  })();
+});
+</script>

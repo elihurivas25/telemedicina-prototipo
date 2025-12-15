@@ -1,0 +1,519 @@
+<!--
+  Página: Disponibilidad del médico (Agendar cita - selección de horario)
+  Rol: PACIENTE
+  Propósito: Permitir al paciente ver la disponibilidad de un médico, seleccionar un bloque de horario,
+             confirmar la cita aceptando el consentimiento informado, y completar un pago simulado para finalizar
+             la reserva y redirigir a la pantalla de cita confirmada.
+-->
+
+<section class="disponibilidad-medico">
+
+  <h2 id="tituloDisponibilidad">AGENDAR CITA</h2>
+  <p id="subtituloDisponibilidad">
+    Selecciona un bloque de horario para tu cita.
+  </p>
+
+  <div id="infoMedico" style="margin-top:15px; margin-bottom:20px;">
+    Cargando información del médico...
+  </div>
+
+  <!-- Lista de días con bloques de disponibilidad -->
+  <div id="listaDias">
+    Cargando disponibilidad...
+  </div>
+
+  <!-- Resumen en pantalla de la selección del paciente -->
+  <div id="seleccionResumen" style="margin-top:20px; font-weight:bold;"></div>
+
+  <!-- Modal: confirmación de cita + aceptación de consentimiento informado -->
+  <div id="modalConfirmar" 
+       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); 
+              justify-content:center; align-items:center; z-index:9999;">
+    <div style="background:#ffffff; border-radius:16px; max-width:700px; width:90%; padding:25px;">
+      <h3 style="text-align:center; margin-top:0;">CONFIRMAR CITA</h3>
+
+      <div style="margin-bottom:15px;">
+        <p><strong>MÉDICO:</strong> <span id="resumenMedico"></span></p>
+        <p><strong>ESPECIALIDAD:</strong> <span id="resumenEspecialidad"></span></p>
+        <p><strong>FECHA / DÍA:</strong> <span id="resumenFecha"></span></p>
+        <p><strong>HORA:</strong> <span id="resumenHora"></span></p>
+        <p><strong>TIPO DE CONSULTA:</strong> <span id="resumenTipo"></span></p>
+        <p><strong>COSTO:</strong> <span id="resumenCosto"></span></p>
+      </div>
+
+      <hr>
+
+      <div style="margin-top:15px; font-size:14px;">
+        <p style="font-weight:bold; margin-bottom:5px;">CONSENTIMIENTO INFORMADO</p>
+        <p style="margin-top:0;">
+          Al aceptar, confirmas que entiendes el alcance y las limitaciones de la consulta a distancia.
+          Este servicio no sustituye una atención médica presencial.
+        </p>
+        <p style="margin-top:0;">
+          Puedes consultar el texto completo del 
+          <a href="/consentimiento-informado" target="_blank">Consentimiento Informado</a>.
+        </p>
+        <label style="display:block; margin-top:10px;">
+          <input type="checkbox" id="chkAceptarConsentimiento">
+          He leído y acepto el Consentimiento Informado.
+        </label>
+      </div>
+
+      <div style="margin-top:20px; text-align:right;">
+        <button type="button" onclick="cerrarModalConfirmar()" style="margin-right:10px;">
+          Cancelar
+        </button>
+        <button type="button" onclick="continuarConfirmacion()">
+          Continuar
+        </button>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+  <!-- Modal: pago simulado (sandbox) -->
+  <div id="modalPago"
+       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6);
+              justify-content:center; align-items:center; z-index:9999;">
+    <div style="background:#ffffff; border-radius:16px; max-width:700px; width:90%; padding:25px;">
+      <h3 style="text-align:center; margin-top:0;">PAGO DE CONSULTA (SANDBOX)</h3>
+
+      <p style="text-align:center; margin-bottom:20px;">
+        Monto a pagar: <strong>$500.00 MXN</strong><br>
+        Este pago es una simulación para fines del prototipo.
+      </p>
+
+      <div style="display:flex; flex-wrap:wrap; gap:15px;">
+        <div style="flex:1 1 250px;">
+          <label>Nombre en la tarjeta</label><br>
+          <input type="text" style="width:100%;" placeholder="Nombre del titular">
+        </div>
+        <div style="flex:1 1 250px;">
+          <label>Número de tarjeta</label><br>
+          <input type="text" style="width:100%;" placeholder="XXXX XXXX XXXX XXXX">
+        </div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:10px;">
+        <div style="flex:1 1 120px;">
+          <label>Fecha de expiración</label><br>
+          <input type="text" style="width:100%;" placeholder="MM/AA">
+        </div>
+        <div style="flex:1 1 120px;">
+          <label>CVC</label><br>
+          <input type="text" style="width:100%;" placeholder="XXX">
+        </div>
+      </div>
+
+      <div style="margin-top:20px; text-align:right;">
+        <button type="button" onclick="cerrarModalPago()" style="margin-right:10px;">
+          Cancelar
+        </button>
+        <button type="button" onclick="procesarPagoSimulado()">
+          Pagar ahora
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+<script>
+// ------------------------
+// Variables globales
+// ------------------------
+let seleccionActual = null;  // Día y horario elegidos por el paciente
+let medicoActual = null;     // Datos del médico cargados desde la API
+const costoConsulta = 500;   // Monto de ejemplo (MXN, modo prueba)
+const tipoConsulta = "Video/Chat"; // Texto para mostrar en el resumen
+
+// Obtener parámetros de la URL (?idMedico=...&especialidad=...)
+function obtenerParametrosCita() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        idMedico: params.get("idMedico") || "",
+        especialidad: params.get("especialidad") || ""
+    };
+}
+
+// Convertir número de día a nombre en texto
+function nombreDiaSemana(valor) {
+    switch (parseInt(valor, 10)) {
+        case 0: return "DOMINGO";
+        case 1: return "LUNES";
+        case 2: return "MARTES";
+        case 3: return "MIÉRCOLES";
+        case 4: return "JUEVES";
+        case 5: return "VIERNES";
+        case 6: return "SÁBADO";
+        default: return valor;
+    }
+}
+
+// Al hacer clic en un bloque, guardar la selección y abrir el modal de confirmación
+function seleccionarBloque(diaSemana, horaInicio, horaFin) {
+    seleccionActual = {
+        diaSemana,
+        horaInicio,
+        horaFin
+    };
+
+    const resumen = document.getElementById("seleccionResumen");
+    const nombreDia = nombreDiaSemana(diaSemana);
+    resumen.textContent = "Has seleccionado: " + nombreDia +
+        " de " + horaInicio.substring(0,5) +
+        " a " + horaFin.substring(0,5) + ".";
+
+    abrirModalConfirmar();
+}
+
+// Construir la tabla de días con los bloques del médico
+function construirDisponibilidad(bloques) {
+    const contenedor = document.getElementById("listaDias");
+
+    if (!bloques || bloques.length === 0) {
+        contenedor.innerHTML = "<p>Este médico aún no ha registrado disponibilidad.</p>";
+        return;
+    }
+
+    // Agrupar bloques por día de la semana
+    const dias = {
+        0: [],
+        1: [],
+        2: [],
+        3: [],
+        4: [],
+        5: [],
+        6: []
+    };
+
+    bloques.forEach(b => {
+        const d = b.diaSemana;
+        if (!dias[d]) dias[d] = [];
+        dias[d].push(b);
+    });
+
+    // Ordenar internamente por hora de inicio
+    Object.keys(dias).forEach(d => {
+        dias[d].sort((a, b) => (a.horaInicio > b.horaInicio ? 1 : -1));
+    });
+
+    // Mostrar Lunes a Domingo: 1,2,3,4,5,6,0
+    const ordenDias = [1, 2, 3, 4, 5, 6, 0];
+
+    let html = '<div style="border:1px solid #ddd; border-radius:12px; padding:15px;">';
+
+    ordenDias.forEach(d => {
+        const bloquesDia = dias[d];
+        const nombreDia = nombreDiaSemana(d);
+
+        html += `
+            <div style="display:flex; align-items:center; padding:8px 0; border-bottom:1px solid #eee;">
+                <div style="flex:0 0 140px; font-weight:bold;">
+                    ${nombreDia}
+                </div>
+                <div style="flex:1;">
+        `;
+
+        if (!bloquesDia || bloquesDia.length === 0) {
+            html += `<span style="color:#999;">-Sin disponibilidad-</span>`;
+        } else {
+            bloquesDia.forEach(b => {
+                const inicio = b.horaInicio ? b.horaInicio.substring(0,5) : "";
+                const fin    = b.horaFin    ? b.horaFin.substring(0,5)    : "";
+
+                html += `
+                    <button
+                        type="button"
+                        style="margin:2px 4px; padding:4px 10px;"
+                        onclick="seleccionarBloque(${d}, '${b.horaInicio}', '${b.horaFin}')"
+                    >
+                        ${inicio} - ${fin}
+                    </button>
+                `;
+            });
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    contenedor.innerHTML = html;
+}
+
+// Cargar información del médico
+async function cargarMedico(idMedico) {
+    const info = document.getElementById("infoMedico");
+
+    try {
+        const respuesta = await fetch("/api/obtener_medico.php?idMedico=" + encodeURIComponent(idMedico));
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida:", texto);
+            info.innerHTML = "<p>Error al interpretar la información del médico.</p>";
+            return;
+        }
+
+        if (!json.ok) {
+            info.innerHTML = "<p>" + (json.error || "No se pudo obtener la información del médico.") + "</p>";
+            return;
+        }
+
+        const m = json.medico;
+        medicoActual = m; // Guardar para usarlo en el modal
+
+        document.getElementById("tituloDisponibilidad").textContent =
+            "AGENDAR CITA - " + m.especialidad.toUpperCase();
+
+        info.innerHTML = `
+            <strong>${m.nombre}</strong><br>
+            Especialidad: ${m.especialidad}<br>
+            Cédula: ${m.cedulaProfesional || "No disponible"}<br>
+            Correo: ${m.email}
+        `;
+
+    } catch (err) {
+        console.error(err);
+        info.innerHTML = "<p>Error de comunicación con el servidor al obtener los datos del médico.</p>";
+    }
+}
+
+// Cargar disponibilidad del médico
+async function cargarDisponibilidad(idMedico) {
+    const contenedor = document.getElementById("listaDias");
+    contenedor.innerHTML = "Cargando disponibilidad...";
+
+    try {
+        const respuesta = await fetch("/api/listar_disponibilidad_medico.php?idMedico=" + encodeURIComponent(idMedico));
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida:", texto);
+            contenedor.innerHTML = "<p>Error al interpretar la respuesta del servidor.</p>";
+            return;
+        }
+
+        if (!json.ok) {
+            contenedor.innerHTML = "<p>" + (json.error || "No se pudo obtener la disponibilidad.") + "</p>";
+            return;
+        }
+
+        construirDisponibilidad(json.bloques);
+
+    } catch (err) {
+        console.error(err);
+        contenedor.innerHTML = "<p>Error de comunicación con el servidor.</p>";
+    }
+}
+
+// Abrir el modal de confirmación y llenar el resumen
+function abrirModalConfirmar() {
+    if (!seleccionActual || !medicoActual) {
+        alert("Ocurrió un problema al obtener la información de la cita.");
+        return;
+    }
+
+    const modal = document.getElementById("modalConfirmar");
+    const diaNombre = nombreDiaSemana(seleccionActual.diaSemana);
+
+    document.getElementById("resumenMedico").textContent       = medicoActual.nombre;
+    document.getElementById("resumenEspecialidad").textContent = medicoActual.especialidad;
+    document.getElementById("resumenFecha").textContent        = diaNombre;
+    document.getElementById("resumenHora").textContent         =
+        seleccionActual.horaInicio.substring(0,5) + " - " + seleccionActual.horaFin.substring(0,5);
+    document.getElementById("resumenTipo").textContent         = tipoConsulta;
+    document.getElementById("resumenCosto").textContent        = "$" + costoConsulta + " MXN";
+
+    // Limpiar el checkbox de consentimiento
+    const chk = document.getElementById("chkAceptarConsentimiento");
+    if (chk) chk.checked = false;
+
+    modal.style.display = "flex";
+}
+
+// Cerrar modal de confirmación
+function cerrarModalConfirmar() {
+    const modal = document.getElementById("modalConfirmar");
+    modal.style.display = "none";
+}
+
+
+
+// Abrir / cerrar modal de pago
+function abrirModalPago() {
+    const modal = document.getElementById("modalPago");
+    modal.style.display = "flex";
+}
+
+function cerrarModalPago() {
+    const modal = document.getElementById("modalPago");
+    modal.style.display = "none";
+}
+
+// Procesar pago simulado
+async function procesarPagoSimulado() {
+    if (!window.citaCreada || !window.citaCreada.idCita) {
+        alert("No se encontró la cita para procesar el pago.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("idCita", window.citaCreada.idCita);
+
+    try {
+        const respuesta = await fetch("/api/registrar_pago.php", {
+            method: "POST",
+            body: formData
+        });
+
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida del servidor:", texto);
+            alert("Error al interpretar la respuesta del servidor al registrar el pago.");
+            return;
+        }
+
+        if (!json.ok) {
+            alert(json.error || "No se pudo registrar el pago.");
+            return;
+        }
+
+        cerrarModalPago();
+
+        // Redirigir a la pantalla de Cita confirmada con el idCita
+        window.location.href = "/cita-confirmada?idCita=" + encodeURIComponent(window.citaCreada.idCita);
+
+    } catch (err) {
+        console.error(err);
+        alert("Error de comunicación con el servidor al registrar el pago.");
+    }
+}
+
+// Botón "Continuar" del modal de confirmación:
+// 1) validar consentimiento
+// 2) registrar el consentimiento
+// 3) crear la cita en estado PendientePago
+// 4) abrir el modal de pago
+async function continuarConfirmacion() {
+    const chk = document.getElementById("chkAceptarConsentimiento");
+    if (!chk || !chk.checked) {
+        alert("Debes aceptar el Consentimiento Informado para continuar.");
+        return;
+    }
+
+    if (!seleccionActual || !medicoActual) {
+        alert("No se encontró la información necesaria de la cita.");
+        return;
+    }
+
+    // 1) Registrar consentimiento
+    try {
+        const respCons = await fetch("/api/registrar_consentimiento.php", {
+            method: "POST"
+        });
+
+        const textoCons = await respCons.text();
+        let jsonCons;
+        try {
+            jsonCons = JSON.parse(textoCons);
+        } catch (err) {
+            console.error("Respuesta no válida al registrar consentimiento:", textoCons);
+            alert("Error al interpretar la respuesta del servidor al registrar el consentimiento.");
+            return;
+        }
+
+        if (!jsonCons.ok) {
+            alert(jsonCons.error || "No se pudo registrar el consentimiento.");
+            return;
+        }
+
+        // Si quieres, podrías usar jsonCons.idConsentimiento para log interno
+        console.log("Consentimiento registrado:", jsonCons.idConsentimiento);
+
+    } catch (err) {
+        console.error(err);
+        alert("Error de comunicación con el servidor al registrar el consentimiento.");
+        return;
+    }
+
+    // 2) Crear la cita (misma lógica que ya teníamos antes)
+    const paramsURL = new URLSearchParams(window.location.search);
+    const especialidad = paramsURL.get("especialidad") || medicoActual.especialidad || "";
+
+    const formData = new FormData();
+    formData.append("idMedico", medicoActual.idMedico);
+    formData.append("diaSemana", seleccionActual.diaSemana);
+    formData.append("horaInicio", seleccionActual.horaInicio);
+    formData.append("horaFin", seleccionActual.horaFin);
+    formData.append("especialidad", especialidad);
+
+    try {
+        const respuesta = await fetch("/api/crear_cita.php", {
+            method: "POST",
+            body: formData
+        });
+
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida del servidor al crear la cita:", texto);
+            alert("Error al interpretar la respuesta del servidor al crear la cita.");
+            return;
+        }
+
+        if (!json.ok) {
+            alert(json.error || "No se pudo crear la cita.");
+            return;
+        }
+
+        // Guardar la información básica de la cita recién creada
+        window.citaCreada = {
+            idCita: json.idCita,
+            inicio: json.inicio,
+            fin: json.fin,
+            estado: json.estado
+        };
+
+        cerrarModalConfirmar();
+        abrirModalPago();
+
+    } catch (err) {
+        console.error(err);
+        alert("Error de comunicación con el servidor al crear la cita.");
+    }
+}
+
+
+// Al cargar la página, tomar idMedico de la URL y cargar datos iniciales
+(function iniciarPantallaDisponibilidad() {
+    const params = obtenerParametrosCita();
+
+    if (!params.idMedico) {
+        document.getElementById("infoMedico").innerHTML =
+            "<p>No se especificó un médico.</p>";
+        document.getElementById("listaDias").innerHTML = "";
+        return;
+    }
+
+    cargarMedico(params.idMedico);
+    cargarDisponibilidad(params.idMedico);
+})();
+</script>

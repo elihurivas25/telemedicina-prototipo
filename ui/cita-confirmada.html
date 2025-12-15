@@ -1,0 +1,147 @@
+<!--
+  Página: Cita confirmada (Comprobante)
+  Rol: PACIENTE
+  Propósito: Mostrar al paciente el detalle de una cita confirmada y su comprobante (incluye datos del médico y del pago),
+             con opción de descargar el comprobante en PDF mediante la impresión del navegador. El envío por correo se simula.
+-->
+
+<section class="cita-confirmada">
+
+  <h2 style="text-align:center;">CITA CONFIRMADA</h2>
+  <p style="text-align:center;" id="textoIntro">
+    Cargando información de tu cita...
+  </p>
+
+  <div id="detalleCita" style="max-width:800px; margin:20px auto; border:1px solid #ddd; border-radius:16px; padding:20px; display:none;">
+    
+    <h3 style="text-align:center; margin-top:0;">Comprobante de cita</h3>
+    
+    <p id="msgEnvio" style="text-align:center; font-size:13px; color:#166534; margin-top:6px; display:none;">
+  ✅ Comprobante enviado a tu correo (simulado).
+</p>
+
+
+    <p><strong>Folio de cita:</strong> <span id="folioCita"></span></p>
+    <p><strong>Médico:</strong> <span id="nombreMedico"></span></p>
+    <p><strong>Especialidad:</strong> <span id="especialidad"></span></p>
+    <p><strong>Cédula profesional:</strong> <span id="cedula"></span></p>
+    <p><strong>Correo de contacto:</strong> <span id="correoMedico"></span></p>
+
+    <hr>
+
+    <p><strong>Fecha de la cita:</strong> <span id="fechaCita"></span></p>
+    <p><strong>Hora:</strong> <span id="horaCita"></span></p>
+    <p><strong>Canal de atención:</strong> <span id="canal"></span></p>
+
+    <hr>
+
+    <p><strong>Folio de pago:</strong> <span id="folioPago"></span></p>
+    <p><strong>Monto pagado:</strong> <span id="montoPago"></span></p>
+    <p><strong>Referencia de pago:</strong> <span id="referenciaPago"></span></p>
+    <p><strong>Proveedor:</strong> <span id="proveedorPago"></span></p>
+
+    <div style="margin-top:20px; text-align:center;">
+      <button type="button" onclick="imprimirComprobante()">
+        Descargar comprobante (PDF)
+      </button>
+      <p style="font-size:12px; color:#666; margin-top:5px;">
+        *En esta versión del prototipo, el comprobante se descarga a través de la función de impresión del navegador.
+      </p>
+    </div>
+
+  </div>
+
+</section>
+
+<script>
+// Obtiene el id de la cita desde la URL (?idCita=c4)
+function obtenerIdCitaDesdeURL() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("idCita") || "";
+}
+
+// Convierte la fecha/hora del backend a un formato más legible para mostrarlo en pantalla
+function formatearFechaHora(fechaHora) {
+    // fechaHora en formato 'YYYY-MM-DD HH:MM:SS'
+    if (!fechaHora) return "";
+    const partes = fechaHora.split(" ");
+    if (partes.length !== 2) return fechaHora;
+
+    const fecha = partes[0];
+    const hora  = partes[1].substring(0,5);
+
+    const [anio, mes, dia] = fecha.split("-");
+    return {
+        fecha: `${dia}/${mes}/${anio}`,
+        hora: hora
+    };
+}
+
+// Consulta el detalle de la cita al backend y llena el comprobante en pantalla
+async function cargarDetalleCita() {
+    const idCita = obtenerIdCitaDesdeURL();
+    const textoIntro = document.getElementById("textoIntro");
+    const contenedor = document.getElementById("detalleCita");
+
+    if (!idCita) {
+        textoIntro.textContent = "No se especificó ninguna cita para mostrar.";
+        return;
+    }
+
+    try {
+        const respuesta = await fetch("/api/detalle_cita.php?idCita=" + encodeURIComponent(idCita));
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            console.error("Respuesta no válida:", texto);
+            textoIntro.textContent = "Error al interpretar la información de la cita.";
+            return;
+        }
+
+        if (!json.ok) {
+            textoIntro.textContent = json.error || "No se pudo obtener la información de la cita.";
+            return;
+        }
+
+        const c = json.cita;
+
+        textoIntro.style.display = "none";
+        contenedor.style.display = "block";
+
+        document.getElementById("folioCita").textContent       = c.idCita;
+        document.getElementById("nombreMedico").textContent    = c.nombreMedico;
+        document.getElementById("especialidad").textContent    = c.especialidad;
+        document.getElementById("cedula").textContent          = c.cedulaProfesional || "No disponible";
+        document.getElementById("correoMedico").textContent    = c.emailMedico;
+
+        const fh = formatearFechaHora(c.inicio);
+        document.getElementById("fechaCita").textContent       = fh.fecha;
+        document.getElementById("horaCita").textContent        = fh.hora;
+        document.getElementById("canal").textContent           = c.canal;
+
+        document.getElementById("folioPago").textContent       = c.idPago || "N/A";
+        document.getElementById("montoPago").textContent       =
+            c.monto ? (`$${parseFloat(c.monto).toFixed(2)} ${c.moneda}`) : "N/A";
+        document.getElementById("referenciaPago").textContent  = c.referencia || "N/A";
+        document.getElementById("proveedorPago").textContent   = c.proveedor || "N/A";
+// Mensaje simulado: aviso de que el comprobante fue "enviado" por correo
+const msgEnvio = document.getElementById("msgEnvio");
+if (msgEnvio) msgEnvio.style.display = "block";
+
+    } catch (err) {
+        console.error(err);
+        textoIntro.textContent = "Error de comunicación con el servidor.";
+    }
+}
+
+// Descarga del comprobante: se apoya en la función de impresión del navegador
+function imprimirComprobante() {
+    window.print();
+}
+
+// Ejecutar al cargar
+cargarDetalleCita();
+</script>

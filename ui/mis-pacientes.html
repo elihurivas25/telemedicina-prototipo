@@ -1,0 +1,87 @@
+<!--
+  Página: Mis pacientes
+  Rol: MEDICO
+  Propósito: Mostrar al médico la lista de pacientes asociados para abrir rápidamente la historia clínica de cada uno.
+             Consume /api/mis_pacientes.php y redirige a /historia-clinica/ pasando el idPaciente por la URL.
+-->
+
+<section id="mis-pacientes" style="max-width: 900px; margin: 0 auto;">
+
+  <h2>MI LISTA DE PACIENTES</h2>
+  <p>Selecciona un paciente para abrir su historia clínica.</p>
+
+  <div id="mpMsg" style="margin:10px 0; color:#b91c1c;"></div>
+
+  <div id="mpLista" style="display:grid; gap:12px;"></div>
+
+</section>
+
+<script>
+(async function(){
+  const cont = document.getElementById("mpLista");
+  const msg  = document.getElementById("mpMsg");
+
+  // Construye la tarjeta visual de cada paciente y el botón para abrir su historia clínica
+  function card(p){
+    const div = document.createElement("div");
+    div.style.border = "1px solid #ddd";
+    div.style.borderRadius = "16px";
+    div.style.padding = "14px";
+    div.style.display = "flex";
+    div.style.justifyContent = "space-between";
+    div.style.alignItems = "center";
+    div.style.gap = "10px";
+
+    const left = document.createElement("div");
+    left.innerHTML = `
+      <strong>${p.nombrePaciente ?? "Paciente"}</strong><br>
+      <small>${p.emailPaciente ?? ""}</small><br>
+      <small>${p.telPaciente ?? ""}</small>
+    `;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Ver historia clínica";
+    btn.style.padding = "10px 14px";
+    btn.style.borderRadius = "12px";
+    btn.style.border = "1px solid #2563eb";
+    btn.style.background = "#2563eb";
+    btn.style.color = "white";
+    btn.style.cursor = "pointer";
+
+    btn.addEventListener("click", () => {
+      // Abrir historia clínica del paciente seleccionado (idPaciente en querystring)
+      window.location.href = `/historia-clinica/?idPaciente=${encodeURIComponent(p.idpaciente)}`;
+
+      // Alternativa (sin mostrar en URL):
+      // localStorage.setItem("hc_idPaciente", p.idpaciente);
+      // window.location.href = `/historia-clinica/`;
+    });
+
+    div.appendChild(left);
+    div.appendChild(btn);
+    return div;
+  }
+
+  try{
+    const r = await fetch("/api/mis_pacientes.php", { method:"GET" });
+    const j = await r.json();
+
+    if(!j.ok){
+      msg.textContent = j.error || "No se pudo cargar la lista.";
+      return;
+    }
+
+    if(!j.pacientes || j.pacientes.length === 0){
+      msg.style.color = "#374151";
+      msg.textContent = "Aún no hay pacientes asociados a este médico.";
+      return;
+    }
+
+    j.pacientes.forEach(p => cont.appendChild(card(p)));
+
+  } catch(e){
+    msg.textContent = "Error de red al cargar pacientes.";
+  }
+})();
+</script>

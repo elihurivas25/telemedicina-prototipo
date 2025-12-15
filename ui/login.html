@@ -1,0 +1,85 @@
+<!--
+  Página: Inicio de sesión
+  Rol: PÚBLICO (sin sesión)
+  Propósito: Permitir el acceso al sistema mediante correo y contraseña, enviando credenciales al endpoint de login
+             y redirigiendo al dashboard correspondiente según la respuesta del servidor.
+-->
+
+<section class="tm-page">
+
+  <div class="tm-card" style="max-width:520px; margin:20px auto;">
+
+    <h2 class="tm-title" style="text-align:center; margin-bottom:5px;">¡Bienvenido!</h2>
+    <p class="tm-subtitle" style="text-align:center; margin-top:0;">Inicia sesión</p>
+
+    <form id="loginForm">
+
+      <label for="email">Correo electrónico:</label>
+      <input
+        type="email"
+        name="email"
+        id="email"
+        placeholder="ejemplo@correo.com"
+        required
+      >
+
+      <label for="password">Contraseña:</label>
+      <input
+        type="password"
+        name="password"
+        id="password"
+        placeholder="Ingresa tu contraseña"
+        required
+      >
+
+      <div style="text-align:center; margin-top:15px;">
+        <button type="submit" class="tm-btn-primary tm-btn-block">Iniciar sesión</button>
+      </div>
+
+    </form>
+
+    <p style="margin-top:15px; font-size:14px; text-align:center;">
+      ¿Aún no tienes tu cuenta de paciente?
+      <a class="tm-link" href="/registrar-paciente">Regístrate ahora</a>
+    </p>
+
+    <div id="loginMsg" class="tm-msg" style="text-align:center;"></div>
+
+  </div>
+</section>
+
+<script>
+// Envío del formulario de login al backend y manejo de la respuesta (ok/redirect o error)
+document.getElementById("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+
+    try {
+        const r = await fetch("/api/login.php", {
+            method: "POST",
+            body: formData
+        });
+
+        const text = await r.text();
+        console.log("Respuesta cruda del servidor:", text);
+
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            alert("Error al interpretar la respuesta del servidor.\n\nTexto recibido:\n" + text);
+            return;
+        }
+
+        if (json.ok) {
+            window.location.href = json.redirect;
+        } else {
+            alert(json.error || "Error en inicio de sesión");
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert("Error de red al comunicarse con el servidor");
+    }
+});
+</script>

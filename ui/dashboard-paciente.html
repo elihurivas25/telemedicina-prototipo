@@ -1,0 +1,465 @@
+<!--
+  Página: Dashboard Paciente (Módulo de citas)
+  Rol: PACIENTE
+  Propósito: Mostrar al paciente sus citas (futuras, en curso y concluidas), permitir iniciar la consulta cuando corresponde,
+             mostrar recordatorios simulados de próximas citas y habilitar acciones del prototipo como cancelación con reembolso simulado
+             y encuesta postconsulta (también simulada) cuando una cita ya finalizó.
+-->
+
+<section id="modulo-citas" class="tm-card">
+
+  <div id="tmRecordatorio" class="tm-msg" style="
+    display:none;
+    background:#fff7e6;
+    border:1px solid #facc15;
+    padding:12px 14px;
+    border-radius:12px;
+    margin-bottom:10px;">
+  </div>
+
+  <div id="citasMsg" class="tm-msg" style="margin-bottom:10px;"></div>
+  <div id="listaCitas" class="tm-citas-list"></div>
+
+  <!-- ===== POSTCONSULTA (SIMULADA) ===== -->
+  <div id="bloquePostconsulta" class="tm-msg" style="
+    display:none;
+    border:1px solid #ddd;
+    border-radius:16px;
+    padding:16px;
+    margin-bottom:10px;
+    background:#ffffff;">
+    <h3 style="margin:0 0 6px 0; text-align:center;">ENCUESTA POSTCONSULTA</h3>
+    <p style="text-align:center; margin:0 0 14px 0;">
+      Tu consulta ha finalizado. Ayúdanos respondiendo una encuesta rápida.
+    </p>
+
+    <form id="formPostconsulta" style="max-width:520px; margin:0 auto;">
+      <input type="hidden" id="pcIdCita" value="">
+
+      <label style="display:block; margin:10px 0 6px;"><strong>Satisfacción (1-5)</strong></label>
+      <select id="pcSatisfaccion" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #ccc;">
+        <option value="">Selecciona...</option>
+        <option value="1">1 - Muy mala</option>
+        <option value="2">2 - Mala</option>
+        <option value="3">3 - Regular</option>
+        <option value="4">4 - Buena</option>
+        <option value="5">5 - Excelente</option>
+      </select>
+
+      <label style="display:block; margin:10px 0 6px;"><strong>¿Se resolvió tu duda?</strong></label>
+      <select id="pcResuelto" required style="width:100%; padding:10px; border-radius:10px; border:1px solid #ccc;">
+        <option value="">Selecciona...</option>
+        <option value="SI">Sí</option>
+        <option value="NO">No</option>
+      </select>
+
+      <label style="display:block; margin:10px 0 6px;"><strong>Comentarios</strong></label>
+      <textarea id="pcComentarios" rows="3"
+        style="width:100%; padding:10px; border-radius:10px; border:1px solid #ccc;"
+        placeholder="(Opcional) ¿Qué podemos mejorar?"></textarea>
+
+      <div style="text-align:center; margin-top:14px;">
+        <button type="submit" class="tm-btn-primary" style="padding:10px 16px; border-radius:12px;">
+          Enviar encuesta
+        </button>
+      </div>
+
+      <p id="pcMsg" style="text-align:center; font-size:13px; margin-top:10px;"></p>
+    </form>
+  </div>
+
+</section>
+
+<script>
+(function(){
+  const citasMsg   = document.getElementById("citasMsg");
+  const listaCitas = document.getElementById("listaCitas");
+  const boxRec     = document.getElementById("tmRecordatorio");
+
+  // Postconsulta
+  const bloquePC   = document.getElementById("bloquePostconsulta");
+  const formPC     = document.getElementById("formPostconsulta");
+  const pcIdCita   = document.getElementById("pcIdCita");
+  const pcMsg      = document.getElementById("pcMsg");
+  const pcSat      = document.getElementById("pcSatisfaccion");
+  const pcRes      = document.getElementById("pcResuelto");
+  const pcCom      = document.getElementById("pcComentarios");
+
+  function parseMySQLLocal(s){
+    if (!s) return null;
+    const parts = s.trim().split(" ");
+    if (parts.length < 2) return null;
+
+    const [Y, M, D] = parts[0].split("-").map(n => parseInt(n, 10));
+    const timeParts = parts[1].split(":");
+    const h = parseInt(timeParts[0] || "0", 10);
+    const m = parseInt(timeParts[1] || "0", 10);
+    const sec = parseInt(timeParts[2] || "0", 10);
+
+    const dt = new Date(Y, (M - 1), D, h, m, sec, 0);
+    if (isNaN(dt.getTime())) return null;
+    return dt;
+  }
+
+  function parseInicio(c){
+    if (!c || !c.inicio) return null;
+    return new Date(c.inicio.replace(" ","T"));
+  }
+
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function horaBonita(d){ return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+
+  function mismoDia(a,b){
+    return a.getFullYear()===b.getFullYear() &&
+           a.getMonth()===b.getMonth() &&
+           a.getDate()===b.getDate();
+  }
+
+  function mostrarRecordatorioDesdeCitas(citas){
+    if (!boxRec) return;
+
+    const ahora = new Date();
+
+    // Solo se consideran citas confirmadas para el recordatorio
+    const confirmadas = (citas || []).filter(c => (c.estado || "").trim() === "Confirmada");
+
+    // Buscar la próxima cita futura (la más cercana)
+    const futuras = confirmadas
+      .map(c => ({...c, _ini: parseInicio(c)}))
+      .filter(c => c._ini && c._ini >= ahora)
+      .sort((a,b) => a._ini - b._ini);
+
+    if (!futuras.length) {
+      boxRec.style.display="none";
+      boxRec.innerHTML="";
+      return;
+    }
+
+    const proxima = futuras[0];
+    const ini = proxima._ini;
+
+    const hoy = mismoDia(ahora, ini);
+    const manana = mismoDia(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()+1), ini);
+
+    const diffHoras = (ini - ahora) / 36e5;
+
+    let titulo = "🔔 Recordatorio de cita";
+    let cuerpo = "";
+
+    if (diffHoras <= 1 && diffHoras > 0) {
+      cuerpo = `Tu consulta es en <strong>menos de 1 hora</strong> (${horaBonita(ini)}).`;
+    } else if (hoy) {
+      cuerpo = `Tu consulta es <strong>HOY</strong> a las <strong>${horaBonita(ini)}</strong>.`;
+    } else if (manana || diffHoras <= 24) {
+      cuerpo = `Tienes una consulta <strong>MAÑANA</strong> a las <strong>${horaBonita(ini)}</strong>.`;
+    } else {
+      boxRec.style.display="none";
+      boxRec.innerHTML="";
+      return;
+    }
+
+    const correoSimulado = "<br><small>📧 Se ha enviado un recordatorio a tu correo electrónico registrado.</small>";
+    boxRec.innerHTML = `${titulo}<br>${cuerpo}${correoSimulado}`;
+    boxRec.style.display = "block";
+  }
+
+  async function validarYEntrarSala(idCita){
+    try {
+      const r = await fetch("/api/permitir_entrar_sala.php?idCita=" + encodeURIComponent(idCita));
+      const text = await r.text();
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        console.error("Respuesta no JSON permitir_entrar_sala:", text);
+        alert("No se pudo validar el acceso a la sala.");
+        return;
+      }
+
+      if (!json.ok) {
+        alert(json.error || "No se puede iniciar la consulta.");
+        return;
+      }
+
+      const cita = json.cita;
+      const url = "/sala-consulta/?" +
+        "idCita=" + encodeURIComponent(cita.idCita) +
+        "&idPaciente=" + encodeURIComponent(cita.idPaciente) +
+        "&canal=" + encodeURIComponent(cita.canal || "");
+
+      window.location.href = url;
+
+    } catch(err){
+      console.error(err);
+      alert("Error de comunicación al validar la sala.");
+    }
+  }
+function horasHasta(d){
+  const ahora = new Date();
+  return (d - ahora) / 36e5;
+}
+
+async function cancelarCita(idCita){
+  if (!confirm("¿Seguro que deseas cancelar esta cita?")) return;
+
+  try {
+    const r = await fetch("/api/cancelar_cita.php", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ idCita })
+    });
+   const text = await r.text();
+console.log("RESPUESTA CRUDA cancelar_cita.php:", text);
+
+let json;
+try { json = JSON.parse(text); }
+catch(e){
+  alert("No se pudo interpretar la respuesta del servidor.\n\nRespuesta cruda:\n" + text);
+  return;
+}
+
+
+    if (!json.ok) {
+      alert(json.error || "No se pudo cancelar la cita.");
+      return;
+    }
+
+    alert("✅ Cita cancelada. Reembolso procesado (simulado).");
+    // Recargar lista para reflejar estado
+    cargarCitas();
+
+  } catch(err){
+    console.error(err);
+    alert("Error de comunicación con el servidor.");
+  }
+}
+
+  function renderCita(c){
+    const ahora = new Date();
+    const ini = parseMySQLLocal(c.inicio);
+    const fin = parseMySQLLocal(c.fin);
+
+    const esFutura = ini && (ahora < ini);
+    const enCurso  = ini && fin && (ahora >= ini) && (ahora <= fin);
+    const pasada   = fin && (ahora > fin);
+
+    const card = document.createElement("div");
+    card.className = "tm-cita";
+
+    const estadoTxt = (c.estado || "").trim();
+    const canalTxt  = (c.canal || "Consulta").toUpperCase();
+
+    const info = document.createElement("div");
+    info.className = "tm-cita__info";
+    info.innerHTML = `
+      <div class="tm-cita__title">
+        ${canalTxt}
+        <span class="tm-cita__estado">${estadoTxt ? "— " + estadoTxt : ""}</span>
+        ${enCurso ? '<span class="tm-badge primary">En curso</span>' : ""}
+        ${pasada ? '<span class="tm-badge">Concluida</span>' : ""}
+      </div>
+      <div class="tm-cita__meta">
+        <div><strong>Médico:</strong> ${c.nombreMedico || "N/D"} ${c.especialidad ? "(" + c.especialidad + ")" : ""}</div>
+        <div><strong>Fecha/Hora:</strong> ${c.inicio ? new Date(c.inicio.replace(" ","T")).toLocaleString() : "N/D"}</div>
+      </div>
+    `;
+
+    const right = document.createElement("div");
+    right.className = "tm-cita__right";
+
+    if (enCurso && estadoTxt === "Cita confirmada") {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tm-btn-primary";
+      btn.textContent = "Iniciar consulta";
+      btn.addEventListener("click", () => validarYEntrarSala(c.idCita));
+      right.appendChild(btn);
+    } else if (esFutura) {
+
+  // Botón Iniciar consulta (deshabilitado hasta horario)
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "tm-btn-secondary";
+  btn.textContent = "Iniciar consulta";
+  btn.disabled = true;
+  btn.title = "Disponible durante el horario de la cita";
+  right.appendChild(btn);
+
+  // Botón Cancelar (E7) si cumple regla: Confirmada y >= 12h antes del inicio
+  if (estadoTxt === "Confirmada" && ini) {
+    const diffH = horasHasta(ini);
+
+    if (diffH >= 12) {
+      const btnCancel = document.createElement("button");
+      btnCancel.type = "button";
+      btnCancel.className = "tm-btn-danger"; // si no tienes clase, no pasa nada
+      btnCancel.textContent = "Cancelar cita";
+      btnCancel.style.marginTop = "8px";
+      btnCancel.addEventListener("click", () => cancelarCita(c.idCita));
+      right.appendChild(btnCancel);
+    } else {
+      // Mensaje opcional (no botón) cuando ya no se puede cancelar
+      const small = document.createElement("div");
+      small.style.fontSize = "12px";
+      small.style.color = "#666";
+      small.style.marginTop = "8px";
+      small.textContent = "No se puede cancelar a menos de 12 horas.";
+      right.appendChild(small);
+    }
+  }
+
+} else {
+
+
+      const badge = document.createElement("div");
+      badge.className = "tm-badge";
+      badge.textContent = "Cita Concluida";
+      right.appendChild(badge);
+    }
+
+    card.appendChild(info);
+    card.appendChild(right);
+    return card;
+  }
+
+  // ====== E6: detectar cita concluida y mostrar encuesta (si no existe log) ======
+  function obtenerUltimaCitaConcluidaConfirmada(citas){
+    const ahora = new Date();
+    const concluidas = (citas || [])
+      .map(c => ({...c, _fin: parseMySQLLocal(c.fin)}))
+      .filter(c => ((c.estado || "").trim() === "Confirmada") && c._fin && (ahora > c._fin))
+      .sort((a,b) => b._fin - a._fin); // más reciente primero
+
+    return concluidas.length ? concluidas[0] : null;
+  }
+
+  async function intentarMostrarEncuestaPostconsulta(citas){
+    if (!bloquePC) return;
+
+    const ult = obtenerUltimaCitaConcluidaConfirmada(citas);
+    if (!ult) {
+      bloquePC.style.display = "none";
+      return;
+    }
+
+    const idCita = ult.idCita;
+
+    try {
+      // Consulta si ya fue respondida (control por auditoría)
+      const r = await fetch("/api/postconsulta_estado.php?idCita=" + encodeURIComponent(idCita));
+      const text = await r.text();
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        console.error("Respuesta no JSON postconsulta_estado:", text);
+        return;
+      }
+
+      // Si ya respondió, no mostrar
+      if (json.ok && json.respondida) {
+        bloquePC.style.display = "none";
+        return;
+      }
+
+      // Mostrar encuesta
+      pcIdCita.value = idCita;
+      pcMsg.textContent = "";
+      pcSat.value = "";
+      pcRes.value = "";
+      pcCom.value = "";
+      bloquePC.style.display = "block";
+
+    } catch(err){
+      console.error(err);
+    }
+  }
+
+  async function enviarEncuestaPostconsulta(e) {
+    e.preventDefault();
+
+    const idCita = pcIdCita.value;
+    const satisfaccion = pcSat.value;
+    const resuelto = pcRes.value;
+    const comentarios = (pcCom.value || "").trim();
+
+    pcMsg.textContent = "Enviando...";
+
+    try {
+      const r = await fetch("/api/postconsulta_encuesta.php", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ idCita, satisfaccion, resuelto, comentarios })
+      });
+      const text = await r.text();
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        console.error("Respuesta no JSON postconsulta_encuesta:", text);
+        pcMsg.textContent = "Error al interpretar respuesta del servidor.";
+        return;
+      }
+
+      if (!json.ok) {
+        pcMsg.textContent = json.error || "No se pudo guardar la encuesta.";
+        return;
+      }
+
+      pcMsg.textContent = "✅ Gracias. Encuesta registrada (simulado).";
+      setTimeout(() => { bloquePC.style.display = "none"; }, 1200);
+
+    } catch(err){
+      console.error(err);
+      pcMsg.textContent = "Error de comunicación con el servidor.";
+    }
+  }
+
+  if (formPC) formPC.addEventListener("submit", enviarEncuestaPostconsulta);
+
+  async function cargarCitas(){
+    citasMsg.textContent = "Cargando citas...";
+    listaCitas.innerHTML = "";
+
+    try {
+      const r = await fetch("/api/get_citas_paciente.php");
+      const text = await r.text();
+
+      let json;
+      try { json = JSON.parse(text); }
+      catch(e){
+        console.error("Respuesta no JSON get_citas_paciente:", text);
+        citasMsg.textContent = "No se pudo interpretar la respuesta del servidor.";
+        return;
+      }
+
+      if (!json.ok) {
+        citasMsg.textContent = json.error || "No se pudieron obtener las citas.";
+        return;
+      }
+
+      const citas = json.citas || [];
+
+      // Recordatorio de próximas citas (simulado)
+      mostrarRecordatorioDesdeCitas(citas);
+
+      // Encuesta postconsulta (simulada)
+      intentarMostrarEncuestaPostconsulta(citas);
+
+      if (citas.length === 0) {
+        citasMsg.textContent = "No tienes citas registradas.";
+        return;
+      }
+
+      citasMsg.textContent = "";
+      citas.forEach(c => listaCitas.appendChild(renderCita(c)));
+
+    } catch(err){
+      console.error(err);
+      citasMsg.textContent = "Error de comunicación con el servidor.";
+    }
+  }
+
+  cargarCitas();
+})();
+</script>

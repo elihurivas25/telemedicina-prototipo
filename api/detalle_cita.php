@@ -84,6 +84,81 @@ try {
         return;
     }
 
+    // =========================================================
+    // E3: ENVÍO DE COMPROBANTE (SIMULADO) + AUDITORÍA
+    // - Se registra 1 sola vez por cita para no duplicar logs.
+    // =========================================================
+    try {
+
+        // 1) Evitar duplicar: si ya existe un log con esa acción y esa idCita, no insertar.
+        $qExiste = $conn->prepare("
+            SELECT 1
+            FROM logauditoria
+            WHERE accion = 'ENVIO_COMPROBANTE_SIMULADO'
+              AND JSON_SEARCH(detalle, 'one', :idCita) IS NOT NULL
+            LIMIT 1
+        ");
+        $qExiste->execute([":idCita" => $idCita]);
+        $yaExiste = (bool)$qExiste->fetchColumn();
+
+        if (!$yaExiste) {
+
+            // 2) Generar idLogAuditoria consecutivo tipo logN
+            $stmtUltLog = $conn->query("
+                SELECT idLogAuditoria
+                FROM logauditoria
+                WHERE idLogAuditoria LIKE 'log%'
+                ORDER BY CAST(SUBSTRING(idLogAuditoria, 4) AS UNSIGNED) DESC
+                LIMIT 1
+            ");
+            $filaUltLog = $stmtUltLog->fetch(PDO::FETCH_ASSOC);
+
+            $nuevoNumLog = 1;
+            if ($filaUltLog && isset($filaUltLog["idLogAuditoria"])) {
+                $ultimo = $filaUltLog["idLogAuditoria"]; // ej: log55
+                $nuevoNumLog = ((int)substr($ultimo, 3)) + 1;
+            }
+            $idLog = "log" . $nuevoNumLog;
+
+            $accion = "ENVIO_COMPROBANTE_SIMULADO";
+
+            $detalleArr = [
+                "evento"  => "envio_comprobante_simulado",
+                "mensaje" => "Pago confirmado. El comprobante se muestra en pantalla y se simula el envío al correo del paciente.",
+                "idCita"  => $idCita,
+                "idPago"  => ($cita["idPago"] ?? null),
+                "monto"   => ($cita["monto"] ?? null),
+                "moneda"  => ($cita["moneda"] ?? null)
+            ];
+            $detalle = json_encode($detalleArr, JSON_UNESCAPED_UNICODE);
+
+            $ip = $_SERVER["REMOTE_ADDR"] ?? "0.0.0.0";
+
+            $sqlIns = "
+                INSERT INTO logauditoria
+                  (idLogAuditoria, idUsuario, accion, detalle, `timestamp`, ip)
+                VALUES
+                  (:idLog, :idUsuario, :accion, CAST(:detalle AS JSON), NOW(), :ip)
+            ";
+
+            $ins = $conn->prepare($sqlIns);
+            if ($ins) {
+                $ins->execute([
+                    ":idLog"     => $idLog,
+                    ":idUsuario" => $idUsuario,
+                    ":accion"    => $accion,
+                    ":detalle"   => $detalle,
+                    ":ip"        => $ip
+                ]);
+            }
+        }
+
+    } catch (Throwable $e) {
+        // No romper el flujo si falla auditoría
+        error_log("Auditoría E3 falló: " . $e->getMessage());
+    }
+
+    // Respuesta normal
     echo json_encode([
         "ok"   => true,
         "cita" => $cita

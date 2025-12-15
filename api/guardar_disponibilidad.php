@@ -17,34 +17,47 @@ if (!isset($_SESSION["rol"]) || $_SESSION["rol"] !== "MEDICO") {
 require_once __DIR__ . "/config.php";
 
 // Recibir datos del formulario
-$diaSemana  = $_POST["diaSemana"]  ?? null;
+$diaSemana  = $_POST["diaSemana"]  ?? null;   // puede ser "0"
 $horaInicio = $_POST["horaInicio"] ?? null;
 $horaFin    = $_POST["horaFin"]    ?? null;
 $duracion   = $_POST["duracion"]   ?? null;
 
-// Validaciones mínimas
-if (!$diaSemana || !$horaInicio || !$horaFin || !$duracion) {
+// ✅ Validaciones mínimas (sin romper Domingo=0)
+if ($diaSemana === null || $diaSemana === "" || $horaInicio === null || $horaInicio === "" || $horaFin === null || $horaFin === "" || $duracion === null || $duracion === "") {
     echo json_encode(["ok" => false, "error" => "Todos los campos son obligatorios"]);
     exit;
 }
 
+// ✅ Validar día de semana (0–6)
+$diaSemanaInt = (int)$diaSemana;
+if ($diaSemanaInt < 0 || $diaSemanaInt > 6) {
+    echo json_encode(["ok" => false, "error" => "Día de la semana inválido"]);
+    exit;
+}
+
+// ✅ Validar horario
 if ($horaFin <= $horaInicio) {
     echo json_encode(["ok" => false, "error" => "La hora final debe ser mayor que la hora de inicio"]);
     exit;
 }
 
-if ($duracion < 1) {
+// ✅ Validar duración
+$duracionInt = (int)$duracion;
+if ($duracionInt < 1) {
     echo json_encode(["ok" => false, "error" => "La duración debe ser mayor a cero"]);
     exit;
 }
 
-$idUsuario = $_SESSION["idUsuario"];
+$idUsuario = $_SESSION["idUsuario"] ?? null;
+if (!$idUsuario) {
+    echo json_encode(["ok" => false, "error" => "Sesión inválida"]);
+    exit;
+}
 
 try {
 
     // 1) Obtener el idMedico a partir del usuario en sesión
-    // Nota: en el servidor los nombres de las tablas están en minúsculas.
-    $consultaMedico = $conn->prepare("SELECT idMedico FROM medico WHERE idUsuario = ?");
+    $consultaMedico = $conn->prepare("SELECT idMedico FROM medico WHERE idUsuario = ? LIMIT 1");
     $consultaMedico->execute([$idUsuario]);
     $medico = $consultaMedico->fetch(PDO::FETCH_ASSOC);
 
@@ -66,19 +79,19 @@ try {
     $insertar->execute([
         $idDisponibilidad,
         $idMedico,
-        $diaSemana,
+        $diaSemanaInt,   // ✅ usar int, ya validado
         $horaInicio,
         $horaFin,
-        $duracion
+        $duracionInt     // ✅ usar int, ya validado
     ]);
 
     // 3) Registrar acción en log de auditoría
     $detalle = json_encode([
-        "diaSemana"   => $diaSemana,
+        "diaSemana"   => $diaSemanaInt,
         "horaInicio"  => $horaInicio,
         "horaFin"     => $horaFin,
-        "duracionMin" => $duracion
-    ]);
+        "duracionMin" => $duracionInt
+    ], JSON_UNESCAPED_UNICODE);
 
     $idLog = uniqid("log_", true);
     $ip    = $_SERVER["REMOTE_ADDR"] ?? "0.0.0.0";
@@ -99,8 +112,6 @@ try {
     echo json_encode(["ok" => true]);
 
 } catch (Throwable $e) {
-    // En producción se recomienda registrar el error en un log
-    // y mostrar solo un mensaje genérico al usuario.
     error_log("Error en guardar_disponibilidad.php: " . $e->getMessage());
     echo json_encode(["ok" => false, "error" => "Error interno en el servidor"]);
 }

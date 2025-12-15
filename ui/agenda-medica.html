@@ -1,0 +1,200 @@
+<!--
+  Página: Agenda médica (Disponibilidad)
+  Rol: MEDICO
+  Propósito: Permitir al médico consultar y administrar sus bloques de disponibilidad (día, hora inicio/fin y duración),
+             registrándolos mediante endpoints del backend y mostrando el resultado en una tabla.
+-->
+
+<section class="agenda-medica">
+
+  <h2>Disponibilidad</h2>
+  <p>Aquí puedes revisar y administrar tus horarios de consulta.</p>
+
+  <!-- Encabezado de la agenda: título y acceso para mostrar el formulario de alta -->
+  <div class="encabezado-agenda" style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+    <strong>Bloques de disponibilidad</strong>
+
+    <!-- Control para mostrar/ocultar el formulario de "Agregar bloque" -->
+    <a href="#" id="btnMostrarFormulario">+ Agregar bloque</a>
+  </div>
+
+  <!-- Tabla principal: lista de bloques de disponibilidad registrados -->
+  <table class="tabla-agenda" style="width:100%; border-collapse: collapse; margin-top:10px;">
+    <thead>
+      <tr>
+        <th style="border-bottom:1px solid #ccc; text-align:left; padding:5px;">Día</th>
+        <th style="border-bottom:1px solid #ccc; text-align:left; padding:5px;">Hora inicio</th>
+        <th style="border-bottom:1px solid #ccc; text-align:left; padding:5px;">Hora fin</th>
+        <th style="border-bottom:1px solid #ccc; text-align:left; padding:5px;">Duración (min)</th>
+      </tr>
+    </thead>
+    <tbody id="listaBloques">
+      <tr>
+        <td colspan="4" style="padding:8px;">
+          Aún no has registrado bloques de disponibilidad.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Formulario: alta de un nuevo bloque (se muestra al dar clic en "+ Agregar bloque") -->
+  <div id="contenedorFormulario" style="margin-top:20px; display:none; border:1px solid #ccc; padding:15px;">
+    <h3>Agregar bloque de disponibilidad</h3>
+
+    <form id="formDisponibilidad">
+
+      <label>Día de la semana</label><br>
+      <select name="diaSemana" required>
+        <option value="">Seleccione...</option>
+        <option value="1">Lunes</option>
+        <option value="2">Martes</option>
+        <option value="3">Miércoles</option>
+        <option value="4">Jueves</option>
+        <option value="5">Viernes</option>
+        <option value="6">Sábado</option>
+        <option value="0">Domingo</option>
+      </select>
+      <br><br>
+
+      <label>Hora inicio</label><br>
+      <input type="time" name="horaInicio" required>
+      <br><br>
+
+      <label>Hora fin</label><br>
+      <input type="time" name="horaFin" required>
+      <br><br>
+
+      <label>Duración del bloque (minutos)</label><br>
+      <input type="number" name="duracion" min="1" required>
+      <br><br>
+
+      <button type="submit">Guardar bloque</button>
+    </form>
+
+    <!-- Mensaje de resultado (éxito/error) al guardar el bloque -->
+    <div id="msgDisponibilidad" style="margin-top:10px; font-size: 14px;"></div>
+  </div>
+
+</section>
+
+<script>
+// Utilidad: convierte el número de día (0-6) a su nombre (Domingo-Sábado)
+function nombreDiaSemana(valor) {
+    switch (parseInt(valor, 10)) {
+        case 0: return "Domingo";
+        case 1: return "Lunes";
+        case 2: return "Martes";
+        case 3: return "Miércoles";
+        case 4: return "Jueves";
+        case 5: return "Viernes";
+        case 6: return "Sábado";
+        default: return valor;
+    }
+}
+
+// Carga inicial y recargas: consulta al backend los bloques guardados y los pinta en la tabla
+async function cargarBloques() {
+    const cuerpoTabla = document.getElementById("listaBloques");
+    cuerpoTabla.innerHTML = "<tr><td colspan='4'>Cargando disponibilidad...</td></tr>";
+
+    try {
+        // Endpoint: devuelve la lista de bloques del médico en sesión
+        const respuesta = await fetch("/api/listar_disponibilidad.php");
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            cuerpoTabla.innerHTML = "<tr><td colspan='4'>Error al interpretar la respuesta del servidor.</td></tr>";
+            console.error("Respuesta cruda:", texto);
+            return;
+        }
+
+        if (!json.ok) {
+            cuerpoTabla.innerHTML = "<tr><td colspan='4'>" + (json.error || "No se pudo obtener la disponibilidad") + "</td></tr>";
+            return;
+        }
+
+        const bloques = json.bloques;
+
+        if (!bloques || bloques.length === 0) {
+            cuerpoTabla.innerHTML = "<tr><td colspan='4'>Aún no has registrado bloques de disponibilidad.</td></tr>";
+            return;
+        }
+
+        // Construcción de filas en base a lo recibido del backend
+        let htmlFilas = "";
+        bloques.forEach(b => {
+            const dia = nombreDiaSemana(b.diaSemana);
+            // Normaliza formato de hora por si viene como hh:mm:ss
+            const inicio = b.horaInicio ? b.horaInicio.substring(0,5) : "";
+            const fin    = b.horaFin    ? b.horaFin.substring(0,5)    : "";
+            const dur    = b.duracionBloqueMin ?? "";
+
+            htmlFilas += `
+                <tr>
+                    <td style="padding:5px; border-bottom:1px solid #eee;">${dia}</td>
+                    <td style="padding:5px; border-bottom:1px solid #eee;">${inicio}</td>
+                    <td style="padding:5px; border-bottom:1px solid #eee;">${fin}</td>
+                    <td style="padding:5px; border-bottom:1px solid #eee;">${dur}</td>
+                </tr>
+            `;
+        });
+
+        cuerpoTabla.innerHTML = htmlFilas;
+
+    } catch (err) {
+        console.error(err);
+        cuerpoTabla.innerHTML = "<tr><td colspan='4'>Error de comunicación con el servidor.</td></tr>";
+    }
+}
+
+// UI: mostrar/ocultar formulario de alta de bloque
+document.getElementById("btnMostrarFormulario").addEventListener("click", function(e){
+    e.preventDefault();
+    const cont = document.getElementById("contenedorFormulario");
+    cont.style.display = (cont.style.display === "none" || cont.style.display === "") ? "block" : "none";
+});
+
+// Guardado: envía el formulario al backend y, si todo sale bien, recarga la tabla
+document.getElementById("formDisponibilidad").addEventListener("submit", async e => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+
+    try {
+        // Endpoint: guarda un bloque para el médico en sesión
+        const respuesta = await fetch("/api/guardar_disponibilidad.php", {
+            method: "POST",
+            body: formData
+        });
+
+        const texto = await respuesta.text();
+
+        let json;
+        try {
+            json = JSON.parse(texto);
+        } catch (err) {
+            alert("Respuesta inválida del servidor:\n\n" + texto);
+            return;
+        }
+
+        const msg = document.getElementById("msgDisponibilidad");
+
+        if (json.ok) {
+            msg.innerHTML = "<span style='color:green;'>Bloque guardado correctamente.</span>";
+            e.target.reset();
+            // Refrescar lista para reflejar el nuevo bloque
+            cargarBloques();
+        } else {
+            msg.innerHTML = "<span style='color:red;'>" + (json.error || "Error al guardar") + "</span>";
+        }
+    } catch (err) {
+        alert("Error de red al comunicarse con el servidor.");
+        console.error(err);
+    }
+});
+
+// Al abrir la página, cargar la disponibilidad existente
+cargarBloques();
+</script>

@@ -1,0 +1,230 @@
+<!--
+  Página: Mi perfil
+  Rol: PACIENTE / MEDICO (según sesión)
+  Propósito: Mostrar y permitir la edición de los datos del usuario en sesión. Carga la información desde /api/perfil.php,
+             despliega secciones específicas por rol (paciente o médico) y guarda cambios mediante el mismo endpoint.
+-->
+
+<section id="mi-perfil" style="max-width: 900px; margin: 0 auto;">
+
+<div id="perfilCard" style="border:1px solid #ddd; border-radius:20px; padding:20px; margin-top:16px;">
+    <div id="perfilMsg" style="margin-bottom:12px; font-size:14px;"></div>
+
+    <!-- Vista rápida -->
+    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+      <div>
+        <strong>Nombre:</strong> <span id="pNombreTxt">-</span><br>
+        <strong>Correo:</strong> <span id="pEmailTxt">-</span><br>
+        <strong>Rol:</strong> <span id="pRolTxt">-</span>
+      </div>
+      <div>
+        <strong>Teléfono:</strong> <span id="pTelefonoTxt">-</span><br>
+        <strong>Última actualización:</strong> <span id="pUpdatedTxt">-</span>
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid #eee; margin:14px 0;">
+
+    <!-- Formulario edición -->
+    <form id="perfilForm">
+      <h3 style="margin:0 0 10px 0;">Editar datos</h3>
+
+      <label>Nombre</label>
+      <input type="text" id="inpNombre" name="nombre" required>
+
+      <label style="margin-top:10px;">Teléfono</label>
+      <input type="tel" id="inpTelefono" name="telefono" maxlength="20" required>
+
+      <label style="margin-top:10px;">Correo (solo lectura)</label>
+      <input type="email" id="inpEmail" name="email" readonly>
+
+      <!-- Sección PACIENTE -->
+      <div id="secPaciente" style="display:none; margin-top:14px;">
+        <h4 style="margin:10px 0;">Datos de paciente</h4>
+
+        <label>Fecha de nacimiento</label>
+        <input type="date" id="inpFechaNacimiento" name="fecha_nacimiento">
+
+        <label style="margin-top:10px;">Sexo</label>
+        <select id="inpSexo" name="sexo">
+          <option value="">(Sin especificar)</option>
+          <option value="F">F</option>
+          <option value="M">M</option>
+          <option value="Otro">Otro</option>
+        </select>
+
+        <!-- Contacto de emergencia -->
+        <label style="margin-top:10px;">Contacto de emergencia - Nombre</label>
+        <input type="text" id="inpContactoEmergNombre" maxlength="100" placeholder="Ej. Juan Pérez">
+
+        <label style="margin-top:10px;">Contacto de emergencia - Teléfono</label>
+        <input type="tel" id="inpContactoEmergTelefono" maxlength="30" placeholder="Ej. +52-618-000-0000">
+      </div>
+
+      <!-- Sección MEDICO -->
+      <div id="secMedico" style="display:none; margin-top:14px;">
+        <h4 style="margin:10px 0;">Datos de médico</h4>
+
+        <label>Cédula profesional (solo lectura)</label>
+        <input type="text" id="inpCedula" readonly>
+
+        <label style="margin-top:10px;">Especialidad (solo lectura)</label>
+        <input type="text" id="inpEspecialidad" readonly>
+
+        <label style="margin-top:10px;">Bio</label>
+        <textarea id="inpBio" name="bio" rows="4" maxlength="800" placeholder="Breve descripción profesional..."></textarea>
+      </div>
+
+      <button type="submit" id="btnGuardarPerfil" style="margin-top:14px;">
+        Guardar cambios
+      </button>
+    </form>
+  </div>
+</section>
+
+<script>
+(function(){
+  const msg = document.getElementById("perfilMsg");
+  const form = document.getElementById("perfilForm");
+  const btn = document.getElementById("btnGuardarPerfil");
+
+  const secPaciente = document.getElementById("secPaciente");
+  const secMedico = document.getElementById("secMedico");
+
+  function setMsg(text, ok){
+    msg.textContent = text || "";
+    msg.style.color = ok ? "#166534" : "#991b1b";
+  }
+
+  function fillText(id, val){
+    const el = document.getElementById(id);
+    if (el) el.textContent = (val ?? "") || "-";
+  }
+
+  function fillInput(id, val){
+    const el = document.getElementById(id);
+    if (el) el.value = (val ?? "") || "";
+  }
+
+  async function cargarPerfil(){
+    setMsg("Cargando perfil...", true);
+    btn.disabled = true;
+
+    try{
+      const r = await fetch("/api/perfil.php", { method: "GET" });
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); } catch(e){
+        setMsg("Respuesta inválida del servidor:\n" + text, false);
+        btn.disabled = false;
+        return;
+      }
+
+      if(!j.ok){
+        setMsg(j.error || "No se pudo cargar el perfil.", false);
+        btn.disabled = false;
+        return;
+      }
+
+      const p = j.perfil;
+
+      fillText("pNombreTxt", p.nombre);
+      fillText("pEmailTxt", p.email);
+      fillText("pRolTxt", p.rol);
+      fillText("pTelefonoTxt", p.telefono);
+      fillText("pUpdatedTxt", p.updatedAt || "");
+
+      fillInput("inpNombre", p.nombre);
+      fillInput("inpTelefono", p.telefono);
+      fillInput("inpEmail", p.email);
+
+      // Mostrar secciones por rol
+      secPaciente.style.display = (p.rol === "PACIENTE") ? "block" : "none";
+      secMedico.style.display   = (p.rol === "MEDICO") ? "block" : "none";
+
+      if(p.rol === "PACIENTE"){
+        fillInput("inpFechaNacimiento", p.fechaNacimiento);
+        fillInput("inpSexo", p.sexo);
+
+        // Separar "Nombre, Tel" desde BD
+        const raw = (p.contactoEmergencia ?? "").trim();
+        if (raw) {
+          const partes = raw.split(",");
+          fillInput("inpContactoEmergNombre", (partes[0] || "").trim());
+          fillInput("inpContactoEmergTelefono", (partes[1] || "").trim());
+        } else {
+          fillInput("inpContactoEmergNombre", "");
+          fillInput("inpContactoEmergTelefono", "");
+        }
+      }
+
+      if(p.rol === "MEDICO"){
+        fillInput("inpCedula", p.cedulaProfesional);
+        fillInput("inpEspecialidad", p.especialidad);
+        fillInput("inpBio", p.bio);
+      }
+
+      setMsg("", true);
+      btn.disabled = false;
+
+    } catch(err){
+      console.error(err);
+      setMsg("Error de red al cargar el perfil.", false);
+      btn.disabled = false;
+    }
+  }
+
+  async function guardarPerfil(e){
+    e.preventDefault();
+    setMsg("Guardando...", true);
+    btn.disabled = true;
+
+    try{
+      const fd = new FormData(form);
+
+      // Concatenar contacto emergencia antes de enviar
+      const nCE = (document.getElementById("inpContactoEmergNombre")?.value || "").trim();
+      const tCE = (document.getElementById("inpContactoEmergTelefono")?.value || "").trim();
+
+      if (secPaciente.style.display !== "none") {
+        if (nCE || tCE) {
+          fd.set("contacto_emergencia", nCE + (tCE ? ", " + tCE : ""));
+        } else {
+          fd.set("contacto_emergencia", "");
+        }
+      }
+
+      const r = await fetch("/api/perfil.php", {
+        method: "POST",
+        body: fd
+      });
+
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); } catch(e){
+        setMsg("Respuesta inválida del servidor:\n" + text, false);
+        btn.disabled = false;
+        return;
+      }
+
+      if(!j.ok){
+        setMsg(j.error || "No se pudo guardar.", false);
+        btn.disabled = false;
+        return;
+      }
+
+      setMsg("Cambios guardados correctamente.", true);
+      await cargarPerfil();
+
+    } catch(err){
+      console.error(err);
+      setMsg("Error de red al guardar.", false);
+      btn.disabled = false;
+    }
+  }
+
+  form.addEventListener("submit", guardarPerfil);
+  document.addEventListener("DOMContentLoaded", cargarPerfil);
+  cargarPerfil();
+})();
+</script>
